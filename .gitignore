@@ -1,0 +1,114 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Model files (large PyTorch models)
+*.pth
+*.pt
+*.pkl
+*.h5
+*.hdf5
+*.ckpt
+*.safetensors
+
+# Training results and outputs
+src/main/mvtec_phase1_vae/train_results/
+src/main/mvtec_phase1_vae/test_results/
+src/main/mvtec_phase1_vae/vae_pretrained/
+src/main/evaluation_results/
+
+# Dataset files (too large for git)
+datasets/
+*.png
+*.jpg
+*.jpeg
+*.tiff
+*.tif
+*.bmp
+*.gif
+
+# Log files
+*.log
+*.txt
+!requirements.txt
+!README.txt
+!license.txt
+
+# Temporary and experimental code
+src/temp-code/
+src/temp-diffusion-impl/
+src/vae-reconstruction-temp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json 
