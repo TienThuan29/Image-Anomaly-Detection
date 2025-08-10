@@ -55,10 +55,10 @@ env/
 *.safetensors
 
 # Training results and outputs
-src/main/mvtec_phase1_vae/train_results/
-src/main/mvtec_phase1_vae/test_results/
-src/main/mvtec_phase1_vae/vae_pretrained/
-src/main/evaluation_results/
+temp/mvtec_phase1_vae/train_results/
+temp/mvtec_phase1_vae/test_results/
+temp/mvtec_phase1_vae/vae_pretrained/
+temp/evaluation_results/
 
 # Dataset files (too large for git)
 datasets/

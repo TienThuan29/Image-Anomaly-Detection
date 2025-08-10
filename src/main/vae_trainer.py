@@ -7,8 +7,8 @@ import numpy as np
 import random
 import os
 from tqdm import tqdm
-from vae_model import VAE
-from utils import ConfigLoader, load_mvtec_train_dataset, load_mvtec_only_good_test_dataset
+from vae_model import VAEResNet
+from utils import ConfigLoader, load_mvtec_train_dataset, load_mvtec_only_good_test_dataset, LossEarlyStopping
 
 config_loader = ConfigLoader("config.yml")
 config = config_loader.load_config()
@@ -42,18 +42,6 @@ def vae_loss_function(
     loss =  MSE + KLD
     return loss, MSE, KLD
 
-# def vae_loss_function(
-#         x_hat: Tensor,
-#         x: Tensor,
-#         mu: Tensor,
-#         log_var: Tensor
-# ):
-#     batch_size = x.size(0)
-#     MSE = F.mse_loss(x_hat, x, reduction='sum') / batch_size
-#     KLD = -0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp()) / batch_size
-#     loss = MSE + KLD
-#     return loss, MSE, KLD
-
 
 def main():
     device = torch.device(f"cuda:{vae_config.get('cuda')}" if vae_config.get('cuda') >= 0 and torch.cuda.is_available() else "cpu")
@@ -77,17 +65,22 @@ def main():
         batch_size=data_config.get('batch_size')
     )
 
-    model = VAE(in_channels=vae_config.get('input_channels'), latent_dim=vae_config.get('z_dim')).to(device)
+    model = VAEResNet(
+        in_channels=vae_config.get('input_channels'),
+        latent_dim=vae_config.get('z_dim')
+    ).to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=float(vae_config.get('lr')), weight_decay=float(vae_config.get('weight_decay')))
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=vae_config.get('epochs'))
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min', factor=0.5, patience=20, min_lr=1e-6)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 25, 0.95)
 
-    # early_stopping = LossEarlyStopping(
-    #     patience=early_stopping_config.get('patience'),
-    #     min_delta=early_stopping_config.get('min_delta'),
-    #     smoothing_window=early_stopping_config.get('smoothing_window'),
-    #     verbose=True
-    # )
+    early_stopping = LossEarlyStopping(
+        patience=early_stopping_config.get('patience'),
+        min_delta=early_stopping_config.get('min_delta'),
+        smoothing_window=early_stopping_config.get('smoothing_window'),
+        verbose=True
+    )
 
     if not os.path.exists(train_result_dir):
         os.makedirs(train_result_dir)
@@ -149,7 +142,21 @@ def main():
                 'RMSE': f'{rmse:.4f}'
             })
 
-        loss_epoch.append(np.sum(loss_batch) / num_batches)
+        # loss_epoch.append(np.sum(loss_batch) / num_batches)
+        # Calculate epoch loss
+        epoch_loss = np.sum(loss_batch) / num_batches
+        loss_epoch.append(epoch_loss)
+
+        # Check early stopping
+        if early_stopping(epoch_loss):
+            print(f"\nEarly stopping triggered at epoch {epoch + 1}")
+            final_epoch = epoch + 1
+            # Log early stopping event
+            with open(log_file_path, 'a') as log_file:
+                log_file.write(f"\nEarly stopping triggered at epoch {epoch + 1}\n")
+                log_file.write(f"Best loss achieved: {early_stopping.best_loss:.6f}\n")
+                log_file.write("=" * 50 + "\n")
+            break
 
         scheduler.step()
 

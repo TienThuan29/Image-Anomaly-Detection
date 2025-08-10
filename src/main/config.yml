@@ -2,7 +2,7 @@ data :
   name: MVTec  #MVTec #MTD #VisA
   mvtec_data_dir: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/datasets/mvtec_anomaly_detection  #MVTec #VisA #MTD
   visa_data_dir: datasets/
-  category: carpet  #['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
+  category: cable  #['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
                    # ['candle', 'capsules', 'cashew', 'chewinggum', 'fryum', 'macaroni1', 'macaroni2', 'pcb1', 'pcb2' ,'pcb3', 'pcb4', 'pipe_fryum']
   image_size: 256
   batch_size: 16
@@ -14,7 +14,8 @@ vae_model:
   cuda: 0
   seed: 42
   lr: 2e-4
-  epochs: 700
+  epochs: 5000
+  dropout: 0.1
   weight_decay: 1e-5
   z_dim: 256
   input_channels: 3
@@ -35,6 +36,8 @@ diffusion_model:
   image_size: 256
   num_timesteps: 1000
   beta_schedule: linear # linear, cosine, sqrt, quadratic
+  model_mean_type: start_x # start_x, epsilon
+  phase1_model_path:
   train_result_base_dir: ./mvtec_phase2_diffusion/train_results/
   pretrained_save_base_dir: ./mvtec_phase2_diffusion/vae_pretrained/
 
@@ -46,9 +49,10 @@ early_stopping:
 
 testing:
   cuda: 0
-  category: carpet
+  category: cable
   vae_test_result_base_dir: ./mvtec_phase1_vae/test_results/
-  vae_model_path:
+  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main/mvtec_phase1_vae/vae_pretrained/cable/cable_vae_final.pth
+
 
 
 

@@ -103,8 +103,8 @@ from torchvision.utils import save_image
 from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
-from vae_model import VAE
-from utils import ConfigLoader, load_mvtec_only_good_test_dataset
+from vae_model import VAEResNet
+from utils import ConfigLoader, load_mvtec_test_dataset, load_mvtec_only_good_test_dataset
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -130,7 +130,7 @@ class VAESSIMEvaluator:
 
     def load_model(self, model_path):
         """Load pretrained VAE model"""
-        model = VAE(
+        model = VAEResNet(
             in_channels=self.vae_config.get('input_channels'),
             latent_dim=self.vae_config.get('z_dim')
         ).to(self.device)
@@ -258,6 +258,10 @@ class VAESSIMEvaluator:
         """Save sample reconstructions for visual inspection"""
         os.makedirs(save_dir, exist_ok=True)
 
+        # Create subdirectory for paired images
+        pairs_dir = os.path.join(save_dir, 'reconstruction_pairs')
+        os.makedirs(pairs_dir, exist_ok=True)
+
         model.eval()
         with torch.no_grad():
             sample_batch = next(iter(dataset))
@@ -268,10 +272,33 @@ class VAESSIMEvaluator:
             # Calculate metrics for samples
             metrics = self.calculate_reconstruction_metrics(sample_images, sample_recon)
 
-            # Create comparison image
+            # Save overall comparison image (original layout)
             comparison = torch.cat([sample_images, sample_recon], dim=0)
-            save_path = os.path.join(save_dir, f'{self.category_name}_reconstruction_samples.png')
-            save_image(comparison, save_path, nrow=num_samples, normalize=True)
+            overall_save_path = os.path.join(save_dir, f'{self.category_name}_reconstruction_overview.png')
+            save_image(comparison, overall_save_path, nrow=num_samples, normalize=True)
+
+            # Save individual paired images
+            for i in range(num_samples):
+                # Create pair: original on left, reconstruction on right
+                pair = torch.cat([sample_images[i:i + 1], sample_recon[i:i + 1]], dim=0)
+                pair_path = os.path.join(pairs_dir,
+                                         f'{self.category_name}_pair_{i + 1:02d}_ssim_{metrics["ssim"][i]:.4f}.png')
+                save_image(pair, pair_path, nrow=2, normalize=True, padding=2)
+
+            # Save individual original and reconstruction images separately
+            originals_dir = os.path.join(save_dir, 'originals')
+            reconstructions_dir = os.path.join(save_dir, 'reconstructions')
+            os.makedirs(originals_dir, exist_ok=True)
+            os.makedirs(reconstructions_dir, exist_ok=True)
+
+            for i in range(num_samples):
+                # Original image
+                orig_path = os.path.join(originals_dir, f'{self.category_name}_original_{i + 1:02d}.png')
+                save_image(sample_images[i:i + 1], orig_path, normalize=True)
+
+                # Reconstruction image
+                recon_path = os.path.join(reconstructions_dir, f'{self.category_name}_reconstruction_{i + 1:02d}.png')
+                save_image(sample_recon[i:i + 1], recon_path, normalize=True)
 
             # Save individual metrics
             metrics_path = os.path.join(save_dir, f'{self.category_name}_good_test_sample_metrics.txt')
@@ -281,15 +308,63 @@ class VAESSIMEvaluator:
                 f.write("=" * 50 + "\n\n")
 
                 for i in range(num_samples):
-                    f.write(f"Sample {i + 1} (Label: {sample_labels[i].item()}):\n")
+                    f.write(f"Sample {i + 1:02d} (Label: {sample_labels[i].item()}):\n")
                     f.write(f"  MSE: {metrics['mse'][i]:.6f}\n")
                     f.write(f"  RMSE: {metrics['rmse'][i]:.6f}\n")
                     f.write(f"  SSIM: {metrics['ssim'][i]:.6f}\n")
                     f.write(f"  MS-SSIM: {metrics['ms_ssim'][i]:.6f}\n")
-                    f.write("-" * 30 + "\n")
+                    f.write(f"  Files:\n")
+                    f.write(
+                        f"    - Pair: reconstruction_pairs/{self.category_name}_pair_{i + 1:02d}_ssim_{metrics['ssim'][i]:.4f}.png\n")
+                    f.write(f"    - Original: originals/{self.category_name}_original_{i + 1:02d}.png\n")
+                    f.write(
+                        f"    - Reconstruction: reconstructions/{self.category_name}_reconstruction_{i + 1:02d}.png\n")
+                    f.write("-" * 50 + "\n")
 
-            print(f"Sample reconstructions saved to: {save_path}")
-            print(f"Sample metrics saved to: {metrics_path}")
+            print(f"Overview image saved to: {overall_save_path}")
+            print(f"Paired images saved to: {pairs_dir}")
+            print(f"Original images saved to: {originals_dir}")
+            print(f"Reconstruction images saved to: {reconstructions_dir}")
+
+    def save_all_reconstruction_pairs(self, model, dataset, save_dir, max_images=None):
+        """Save all reconstruction pairs from dataset"""
+        pairs_dir = os.path.join(save_dir, 'all_reconstruction_pairs')
+        os.makedirs(pairs_dir, exist_ok=True)
+
+        model.eval()
+        image_count = 0
+
+        print(f"\nSaving all reconstruction pairs...")
+
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(tqdm(dataset, desc="Saving pairs")):
+                images = batch['image'].to(self.device)
+                reconstructed, _, _ = model(images)
+
+                # Calculate metrics for this batch
+                metrics = self.calculate_reconstruction_metrics(images, reconstructed)
+
+                # Save each pair in batch
+                for i in range(images.size(0)):
+                    if max_images and image_count >= max_images:
+                        break
+
+                    # Create pair: original on left, reconstruction on right
+                    pair = torch.cat([images[i:i + 1], reconstructed[i:i + 1]], dim=0)
+
+                    # Include SSIM score in filename
+                    ssim_score = metrics['ssim'][i]
+                    pair_path = os.path.join(pairs_dir,
+                                             f'{self.category_name}_pair_{image_count + 1:04d}_ssim_{ssim_score:.4f}.png')
+
+                    save_image(pair, pair_path, nrow=2, normalize=True, padding=2)
+                    image_count += 1
+
+                if max_images and image_count >= max_images:
+                    break
+
+        print(f"Saved {image_count} reconstruction pairs to: {pairs_dir}")
+        return image_count
 
     def run_evaluation(self, model_path, save_results_dir=None):
         """Run evaluation pipeline - only on good test images"""
@@ -318,6 +393,19 @@ class VAESSIMEvaluator:
 
         # Save sample reconstructions (from good test set)
         self.save_sample_reconstructions(model, good_test_dataset, save_results_dir)
+
+        # Optionally save all reconstruction pairs (uncomment if needed)
+        # print("\nDo you want to save all reconstruction pairs? (y/n): ", end="")
+        # save_all = input().lower().strip() == 'y'
+        # if save_all:
+        #     max_images = int(input("Maximum number of pairs to save (or 0 for all): "))
+        #     if max_images == 0:
+        #         max_images = None
+        #     self.save_all_reconstruction_pairs(model, good_test_dataset, save_results_dir, max_images)
+
+        # Or automatically save a limited number of pairs
+        print("\nSaving additional reconstruction pairs...")
+        self.save_all_reconstruction_pairs(model, good_test_dataset, save_results_dir, max_images=50)
 
         # Save detailed results
         results_file = os.path.join(save_results_dir, f'{self.category_name}_good_test_evaluation.txt')
