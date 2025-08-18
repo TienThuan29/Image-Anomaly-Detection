@@ -109,6 +109,17 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+config_loader = ConfigLoader("config.yml")
+config = config_loader.load_config()
+data_config = config_loader.get_section("data")
+test_config = config_loader.get_section("testing")
+vae_config = config_loader.get_section("vae_model")
+early_stopping_config = config_loader.get_section("early_stopping")
+
+category_name = data_config.get('category')
+train_result_dir = vae_config.get('train_result_base_dir') + category_name
+pretrained_save_dir = vae_config.get('pretrained_save_base_dir') + category_name
+
 
 class VAESSIMEvaluator:
     def __init__(self, config_path="config.yml"):
@@ -443,7 +454,8 @@ def main():
     # Model path - adjust this to your model path
     category_name = evaluator.category_name
     pretrained_save_dir = evaluator.vae_config.get('pretrained_save_base_dir') + category_name
-    model_path = f'{pretrained_save_dir}/{category_name}_vae_best_test_mse.pth'  # or _vae_final.pth
+    # model_path = f'{pretrained_save_dir}/{category_name}_vae_best_test_mse.pth'  # or _vae_final.pth
+    model_path = test_config.get("vae_model_path")
 
     # Check if model exists
     if not os.path.exists(model_path):

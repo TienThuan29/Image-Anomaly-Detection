@@ -21,7 +21,7 @@ def load_mvtec_train_dataset(
         image_size=image_size,
         is_train=True,
         is_mask=True,
-        use_cutout=True
+        use_cutout=False
     )
 
     train_loader = DataLoader(

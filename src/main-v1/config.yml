@@ -1,0 +1,67 @@
+data :
+  name: MVTec
+  mvtec_data_dir: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/datasets/mvtec_anomaly_detection
+  visa_data_dir: datasets/
+  category: hazelnut  #['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
+                   # ['candle', 'capsules', 'cashew', 'chewinggum', 'fryum', 'macaroni1', 'macaroni2', 'pcb1', 'pcb2' ,'pcb3', 'pcb4', 'pipe_fryum']
+  image_size: 256
+  batch_size: 2
+  test_batch_size: 2
+  mask : True
+  input_channel : 3
+
+vae_model:
+  cuda: 0
+  seed: 42
+  lr: 1e-4
+  epochs: 5000
+  dropout: 0.1
+  batch_size: 2
+  weight_decay: 1e-5
+  z_dim: 256
+  input_channels: 3
+  output_channels: 3
+  image_size: 256
+  save_freq: 50
+  sample_freq: 30
+  testing_freq: 10
+  train_result_base_dir: ./mvtec_phase1_vae_unet/train_results/
+  pretrained_save_base_dir: ./mvtec_phase1_vae_unet/vae_pretrained/
+
+diffusion_model:
+  cuda: 0
+  seed: 42
+  lr: 3e-4
+  epochs: 500
+  batch_size: 8
+  weight_decay: 1e-5
+#  input_channels: 3
+#  output_channels: 3
+  image_size: 256
+  z_dim: 256
+  num_timesteps: 1000
+  beta_schedule: linear # linear, cosine, sqrt, quadratic
+  model_mean_type: start_x # start_x, epsilon
+  phase1_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1/mvtec_phase1_vae/vae_pretrained/bottle/bottle_vae_latest.pth
+  train_result_base_dir: ./mvtec_phase2_diffusion/train_results/
+  pretrained_save_base_dir: ./mvtec_phase2_diffusion/vae_pretrained/
+
+early_stopping:
+  is_early_stopping: True
+  patience: 50
+  min_delta: 0.01
+  smoothing_window: 5
+
+testing:
+  cuda: 0
+  category: grid
+  vae_test_result_base_dir: ./mvtec_phase1_vae/test_results/
+  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1/mvtec_phase1_vae/vae_pretrained/grid/grid_vae_latest.pth
+
+
+
+
+
+
+
+

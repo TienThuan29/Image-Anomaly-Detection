@@ -20,7 +20,7 @@ class MvTecDataset(Dataset):
             # Cutout parameters
             use_cutout: bool = False,
             cutout_n_holes: int = 1,
-            cutout_length: int = 24,
+            cutout_length: int = 16, # 24: cutout màu đen bị học luôn!!!
             cutout_probability: float = 0.3
     ):
         self.dataset_root_dir = dataset_root_dir
