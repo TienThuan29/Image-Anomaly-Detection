@@ -1,99 +1,3 @@
-# import time
-# from torchvision.utils import save_image
-# import torch
-# from torch import Tensor
-# import torch.nn.functional as F
-# import numpy as np
-# import random
-# import os
-# from tqdm import tqdm
-# from vae_model import VAE
-# from utils import ConfigLoader, load_mvtec_train_dataset, load_mvtec_only_good_test_dataset
-#
-# config_loader = ConfigLoader("config.yml")
-# config = config_loader.load_config()
-# data_config = config_loader.get_section("data")
-# vae_config = config_loader.get_section("vae_model")
-# early_stopping_config = config_loader.get_section("early_stopping")
-# testing_config = config_loader.get_section("testing")
-#
-# category_name = data_config.get('category')
-# test_result_dir = testing_config.get('vae_test_result_base_dir') + category_name
-#
-#
-# def set_seed(seed):
-#     torch.manual_seed(seed)
-#     torch.cuda.manual_seed_all(seed)
-#     np.random.seed(seed)
-#     random.seed(seed)
-#     torch.backends.cudnn.deterministic = True
-#     os.environ['PYTHONHASHSEED'] = str(seed)
-#
-#
-# def run_testing():
-#     # Initialize device
-#     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#
-#     # Initialize and load the model
-#     model = VAE(
-#         in_channels=vae_config.get('input_channels'),
-#         latent_dim=vae_config.get('z_dim')
-#     ).to(device)
-#
-#     # load model
-#     if os.path.exists(testing_config.get('vae_model_path')):
-#         checkpoint = torch.load(testing_config.get('vae_model_path'), map_location=device)
-#         if 'model_state_dict' in checkpoint:
-#             model.load_state_dict(checkpoint['model_state_dict'])
-#         else:
-#             model.load_state_dict(checkpoint)
-#         print(f"Loaded model from {testing_config.get('vae_model_path')}")
-#     else:
-#         raise FileNotFoundError(f"Model checkpoint not found at {testing_config.get('vae_model_path')}")
-#
-#     # Load test dataset
-#     test_dataset = load_mvtec_only_good_test_dataset(
-#         dataset_root_dir=data_config.get('mvtec_data_dir'),
-#         category=data_config.get('category'),
-#         image_size=data_config.get('image_size'),
-#         batch_size=data_config.get('batch_size')
-#     )
-#
-#     model.eval()
-#     test_mse_losses = []
-#
-#     print("Running inference on test dataset...")
-#     with torch.no_grad():
-#         for test_batch in tqdm(test_dataset, desc="Testing"):
-#             test_images = test_batch['image'].to(device)
-#             test_reconstructed, _, _ = model(test_images)
-#
-#             # Calculate MSE for good test dataset
-#             batch_mse = F.mse_loss(test_reconstructed, test_images, reduction='none')
-#             # Average over spatial dimensions (C, H, W) to get MSE per image
-#             batch_mse = batch_mse.view(batch_mse.size(0), -1).mean(dim=1)
-#             test_mse_losses.extend(batch_mse.cpu().numpy())
-#
-#     # Calculate average MSE across all test images
-#     avg_test_mse = np.mean(test_mse_losses)
-#     print(f"Average test MSE: {avg_test_mse:.6f}")
-#
-#     # Save results
-#     results_file = os.path.join(test_result_dir, 'test_results.txt')
-#     os.makedirs(test_result_dir, exist_ok=True)
-#     with open(results_file, 'w') as f:
-#         f.write(f"Average test MSE: {avg_test_mse:.6f}\n")
-#         f.write(f"Number of test samples: {len(test_mse_losses)}\n")
-#
-#     print(f"Results saved to {results_file}")
-#     return avg_test_mse, test_mse_losses
-#
-#
-# if __name__ == '__main__':
-#     set_seed(vae_config.get('seed'))
-#     avg_mse, mse_losses = run_testing()
-
-
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -101,10 +5,9 @@ import os
 from tqdm import tqdm
 from torchvision.utils import save_image
 from sklearn.metrics import roc_auc_score
-import matplotlib.pyplot as plt
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
-from vae_model import VAEResNet
-from utils import ConfigLoader, load_mvtec_test_dataset, load_mvtec_only_good_test_dataset
+from vae_unet_model import LightweightVAEUNet
+from utils import ConfigLoader, load_mvtec_only_good_test_dataset
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -141,9 +44,10 @@ class VAESSIMEvaluator:
 
     def load_model(self, model_path):
         """Load pretrained VAE model"""
-        model = VAEResNet(
+        model = LightweightVAEUNet(
             in_channels=self.vae_config.get('input_channels'),
-            latent_dim=self.vae_config.get('z_dim')
+            latent_dim=self.vae_config.get('z_dim'),
+            out_channels=self.vae_config.get('output_channels')
         ).to(self.device)
 
         checkpoint = torch.load(model_path, map_location=self.device)

@@ -7,19 +7,46 @@ import numpy as np
 import random
 import os
 from tqdm import tqdm
-# from vae_resnet_model import VAEResNet
-from vae_unet_model import LightweightVAEUNet
-from utils import ConfigLoader, load_mvtec_train_dataset, LossEarlyStopping
+from vae_unet_model import VAEUnet
+from vae_resnet_model import VAEResNet
+from config import load_config
+from utils import  load_mvtec_train_dataset, LossEarlyStopping, get_optimizer
 
-config_loader = ConfigLoader("config.yml")
-config = config_loader.load_config()
-data_config = config_loader.get_section("data")
-vae_config = config_loader.get_section("vae_model")
-early_stopping_config = config_loader.get_section("early_stopping")
+config = load_config()
+# general
+seed = config.general.seed
+cuda = config.general.cuda
+image_size = config.general.image_size
+batch_size = config.general.batch_size
+input_channels = config.general.input_channels
+output_channels = config.general.output_channels
 
-category_name = data_config.get('category')
-train_result_dir = vae_config.get('train_result_base_dir') + category_name
-pretrained_save_dir = vae_config.get('pretrained_save_base_dir') + category_name
+# data
+category_name = config.data.category
+mvtec_data_dir = config.data.mvtec_data_dir
+mask = config.data.mask
+
+# vae
+vae_name = config.vae_model.name
+epochs = config.vae_model.epochs
+z_dim = config.vae_model.z_dim
+lr = float(config.vae_model.lr)
+dropout_p = config.vae_model.dropout_p
+weight_decay = float(config.vae_model.weight_decay)
+save_freq = config.vae_model.save_freq
+sample_freq = config.vae_model.sample_freq
+backbone = config.vae_model.backbone # backbone for resnet
+optimizer_name = config.vae_model.optimizer_name
+resume_checkpoint_path = config.vae_model.resume_checkpoint
+
+# save train result dir
+train_result_dir = config.vae_model.train_result_base_dir + vae_name + "/"
+pretrained_save_dir = config.vae_model.pretrained_save_base_dir + vae_name + "/"
+
+# early stopping
+patience = config.early_stopping.patience
+min_delta = config.early_stopping.min_delta
+smoothing_window = config.early_stopping.smoothing_window
 
 
 def set_seed(seed):
@@ -43,6 +70,12 @@ def vae_loss_function(
     KLD = -0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp())
     loss = MSE + KLD
     return loss, MSE, KLD
+
+
+# def vae_loss_function(x_hat, x, mu, log_var):
+#     mse = F.mse_loss(x_hat, x, reduction='mean')
+#     kld = -0.5 * torch.mean(1 + log_var - mu**2 - log_var.exp())
+#     return mse + kld, mse, kld
 
 
 def save_checkpoint(model, optimizer, scheduler, epoch, loss_epoch, best_loss,
@@ -94,41 +127,47 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None, devi
     return start_epoch, train_losses, best_loss
 
 
-def main(resume_from_checkpoint=None):
-    device = torch.device(
-        f"cuda:{vae_config.get('cuda')}" if vae_config.get('cuda') >= 0 and torch.cuda.is_available() else "cpu")
+def main(resume_from_checkpoint=None, batch_size=batch_size):
+    device = torch.device(f"cuda:{cuda}" if cuda >= 0 and torch.cuda.is_available() else "cpu")
     print(f'Training VAE on class: {category_name}')
     print(f"Device: {device}")
 
     train_dataset = load_mvtec_train_dataset(
-        dataset_root_dir=data_config.get('mvtec_data_dir'),
-        category=data_config.get('category'),
-        image_size=data_config.get('image_size'),
-        batch_size=data_config.get('batch_size')
+        dataset_root_dir=mvtec_data_dir,
+        category=category_name,
+        image_size=image_size,
+        batch_size=batch_size
     )
 
-    # test_dataset = load_mvtec_only_good_test_dataset(
-    #     dataset_root_dir=data_config.get('mvtec_data_dir'),
-    #     category=data_config.get('category'),
-    #     image_size=data_config.get('image_size'),
-    #     batch_size=data_config.get('batch_size')
-    # )
+    if vae_name == 'vae_resnet':
+        model = VAEResNet(
+            in_channels=input_channels,
+            out_channels=output_channels,
+            latent_dim=z_dim,
+            resnet_name=backbone,
+            dropout_p=dropout_p
+        ).to(device)
+    elif vae_name == 'vae_unet':
+        model = VAEUnet(
+            in_channels=input_channels,
+            latent_dim=z_dim,
+            out_channels=output_channels
+        ).to(device)
+    else:
+        raise ValueError(f"Unknown vae model: {vae_name}")
 
-    model = LightweightVAEUNet(
-        in_channels=vae_config.get('input_channels'),
-        latent_dim=vae_config.get('z_dim'),
-        out_channels=vae_config.get('output_channels', vae_config.get('input_channels'))
-    ).to(device)
-
-    # SGD optimizer, AdamW
-    optimizer = torch.optim.Adam(model.parameters(), lr=float(vae_config.get('lr')),
-                                 weight_decay=float(vae_config.get('weight_decay')))
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=vae_config.get('epochs'))
+    optimizer = get_optimizer(
+        optimizer_name=optimizer_name,
+        params=model.parameters(),
+        lr=lr,
+        weight_decay=weight_decay
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     early_stopping = LossEarlyStopping(
-        patience=early_stopping_config.get('patience'),
-        min_delta=early_stopping_config.get('min_delta'),
-        smoothing_window=early_stopping_config.get('smoothing_window'),
+        patience=patience,
+        min_delta=min_delta,
+        smoothing_window=smoothing_window,
         verbose=True
     )
 
@@ -150,6 +189,7 @@ def main(resume_from_checkpoint=None):
         start_epoch, loss_epoch, best_loss = load_checkpoint(
             resume_from_checkpoint, model, optimizer, scheduler, device
         )
+        model.to(device)
         early_stopping.best_loss = best_loss
 
     # Log file
@@ -163,8 +203,8 @@ def main(resume_from_checkpoint=None):
             log_file.write(f"\nResuming training from epoch {start_epoch}\n")
             log_file.write("=" * 50 + "\n\n")
 
-    final_epoch = vae_config.get('epochs')
-    epoch_bar = tqdm(range(start_epoch, vae_config.get('epochs')), desc="Training Progress", position=0)
+    final_epoch = epochs
+    epoch_bar = tqdm(range(start_epoch, epochs), desc="Training Progress", position=0)
 
     for epoch in epoch_bar:
         model.train()
@@ -173,7 +213,7 @@ def main(resume_from_checkpoint=None):
         loss_batch = []
         num_batches = 0
 
-        batch_bar = tqdm(train_dataset, desc=f"Epoch {epoch + 1}/{vae_config.get('epochs')}", leave=False, position=1)
+        batch_bar = tqdm(train_dataset, desc=f"Epoch {epoch + 1}/{epochs}", leave=False, position=1)
         for batch_idx, batch in enumerate(batch_bar):
             images = batch['image'].to(device)
             batch_size = images.size(0)
@@ -200,8 +240,8 @@ def main(resume_from_checkpoint=None):
                 'RMSE': f'{rmse:.4f}'
             })
 
-            epoch_loss = np.sum(loss_batch) / num_batches
-            loss_epoch.append(epoch_loss)
+        epoch_loss = np.sum(loss_batch) / num_batches
+        loss_epoch.append(epoch_loss)
 
 
         # save best model
@@ -235,7 +275,7 @@ def main(resume_from_checkpoint=None):
         scheduler.step()
 
         # Save sample reconstructions
-        if (epoch + 1) % vae_config.get('sample_freq') == 0:
+        if (epoch + 1) % sample_freq == 0:
             model.eval()
             with torch.no_grad():
                 sample_batch = next(iter(train_dataset))
@@ -249,7 +289,7 @@ def main(resume_from_checkpoint=None):
         # Calculate timing
         t2 = time.time()
         epoch_time = t2 - t1
-        remaining_time = (vae_config.get('epochs') - epoch - 1) * epoch_time
+        remaining_time = (epochs - epoch - 1) * epoch_time
 
         # Update main progress bar
         postfix_dict = {'Train': f'{epoch_loss:.4f}',
@@ -275,19 +315,19 @@ def main(resume_from_checkpoint=None):
         f.write(f"Total epochs trained: {final_epoch}\n")
         f.write(f"Best loss achieved: {best_loss:.6f}\n")
         f.write(f"Final loss: {loss_epoch[-1]:.6f}\n")
-        f.write(f"Early stopping triggered: {'Yes' if final_epoch < vae_config.get('epochs') else 'No'}\n")
+        f.write(f"Early stopping triggered: {'Yes' if final_epoch < epochs else 'No'}\n")
         f.write(f"Available checkpoints:\n")
         f.write(f"  - Best model: {category_name}_vae_best.pth\n")
         f.write(f"  - Latest model: {category_name}_vae_latest.pth\n")
         f.write(f"  - Final model: {category_name}_vae_final.pth\n")
-        if final_epoch < vae_config.get('epochs'):
+        if final_epoch < epochs:
             f.write(f"  - Early stop model: {category_name}_vae_early_stop_epoch_{final_epoch - 1}.pth\n")
 
     return loss_epoch
 
 
 if __name__ == '__main__':
-    set_seed(vae_config.get('seed'))
-    resume_checkpoint = None
+    set_seed(seed)
+    resume_checkpoint = resume_checkpoint_path
     loss_epoch = main(resume_from_checkpoint=resume_checkpoint)
     print(f"Training completed!")

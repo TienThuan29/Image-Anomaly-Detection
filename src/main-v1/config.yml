@@ -2,11 +2,11 @@ data :
   name: MVTec
   mvtec_data_dir: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/datasets/mvtec_anomaly_detection
   visa_data_dir: datasets/
-  category: hazelnut  #['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
+  category: cable  #['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
                    # ['candle', 'capsules', 'cashew', 'chewinggum', 'fryum', 'macaroni1', 'macaroni2', 'pcb1', 'pcb2' ,'pcb3', 'pcb4', 'pipe_fryum']
   image_size: 256
-  batch_size: 2
-  test_batch_size: 2
+  batch_size: 16
+  test_batch_size: 16
   mask : True
   input_channel : 3
 
@@ -16,7 +16,7 @@ vae_model:
   lr: 1e-4
   epochs: 5000
   dropout: 0.1
-  batch_size: 2
+  batch_size: 16
   weight_decay: 1e-5
   z_dim: 256
   input_channels: 3
@@ -54,9 +54,9 @@ early_stopping:
 
 testing:
   cuda: 0
-  category: grid
+  category: cable
   vae_test_result_base_dir: ./mvtec_phase1_vae/test_results/
-  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1/mvtec_phase1_vae/vae_pretrained/grid/grid_vae_latest.pth
+  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1/mvtec_phase1_vae_unet/vae_pretrained/cable/cable_vae_best.pth
 
 
 

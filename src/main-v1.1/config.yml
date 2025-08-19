@@ -1,0 +1,58 @@
+data:
+  name: mvtec # mvtect, visa
+  mvtec_data_dir: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/datasets/mvtec_anomaly_detection
+  visa_data_dir:
+  category: bottle
+  mask: True
+  # mvtec: ['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
+  # visa: ['candle', 'capsules', 'cashew', 'chewinggum', 'fryum', 'macaroni1', 'macaroni2', 'pcb1', 'pcb2' ,'pcb3', 'pcb4', 'pipe_fryum']
+  
+general:
+  seed: 42
+  batch_size: 16
+  image_size: 256
+  input_channels: 3
+  output_channels: 3
+  cuda: 0
+
+vae_model:
+  name: vae_resnet # vae_resnet, vae_unet
+  lr: 1e-4
+  epochs: 5000
+  weight_decay: 1e-5
+  z_dim: 256
+  dropout_p: 0.1
+  save_freq: 30
+  sample_freq: 30
+  backbone: resnet34 # resnet18, resnet34, resnet50
+  optimizer_name: AdamW # Adam, SGD, AdamW
+  train_result_base_dir: ./mvtec_phase1_vae/train_results/
+  pretrained_save_base_dir: ./mvtec_phase1_vae/vae_pretrained/
+  resume_checkpoint:
+
+diffusion_model:
+  name: diffusion_model
+  z_dim: 256
+  num_timesteps: 1000
+  optimizer_name: adam # adam, sgd, adamW
+  beta_schedule: linear # linear, cosine
+  train_result_base_dir: ./mvtec_phase2_diffusion_unet/train_results/
+  pretrained_save_base_dir: ./mvtec_phase2_diffusion_unet/diffu_pretrained/
+  phase1_vae_pretrained_path: 
+
+early_stopping:
+  is_early_stopping: True
+  patience: 20
+  min_delta: 0.01
+  smoothing_window: 5
+
+vae_testing:
+  category: bottle
+  vae_test_result_base_dir: 
+  vae_model_path: 
+
+diffusion_testing:
+  category: bottle
+  diffusion_test_result_base_dir: 
+  diffusion_model_path: 
+  diffusion_vae_model_path:
