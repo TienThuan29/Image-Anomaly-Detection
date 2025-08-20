@@ -40,8 +40,8 @@ optimizer_name = config.vae_model.optimizer_name
 resume_checkpoint_path = config.vae_model.resume_checkpoint
 
 # save train result dir
-train_result_dir = config.vae_model.train_result_base_dir + vae_name + "/"
-pretrained_save_dir = config.vae_model.pretrained_save_base_dir + vae_name + "/"
+train_result_dir = config.vae_model.train_result_base_dir + vae_name + "/" + category_name + "/"
+pretrained_save_dir = config.vae_model.pretrained_save_base_dir + vae_name + "/" + category_name + "/"
 
 # early stopping
 patience = config.early_stopping.patience
