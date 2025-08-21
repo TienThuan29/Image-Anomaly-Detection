@@ -3,9 +3,7 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 from diffusion_scheduler import get_named_beta_schedule
 
-
 class GaussianDiffusion:
-
     def __init__(
             self,
             num_timesteps: int = 1000,

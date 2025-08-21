@@ -7,11 +7,14 @@ import torch.nn.functional as F
 from vae_resnet_model import VAEResNet
 from vae_unet_model import VAEUnet
 from diffusion_gaussian import GaussianDiffusion
-from utils import load_mvtec_train_dataset
+from utils import load_mvtec_train_dataset, load_mvtec_test_dataset
 from diffusion_model import UNetModel
 from tqdm import tqdm
 from config import load_config
 from utils import get_optimizer
+from typing import List
+from inference import compute_anomaly_map, normalize_maps_global, eval_auroc_image, eval_auroc_pixel, to_label_list
+
 
 config = load_config("config.yml")
 
@@ -29,8 +32,8 @@ mvtec_data_dir = config.data.mvtec_data_dir
 mask = config.data.mask
 
 # vae
-vae_name = config.vae.name
-backbone = config.vae.backbone
+vae_name = config.vae_model.name
+backbone = config.vae_model.backbone
 
 # diffusion
 diffusion_name = config.diffusion_model.name
@@ -48,16 +51,15 @@ phase1_vae_pretrained_path = config.diffusion_model.phase1_vae_pretrained_path
 train_result_dir = config.diffusion_model.train_result_base_dir + category_name + "/"
 pretrained_save_dir = config.diffusion_model.pretrained_save_base_dir + category_name + "/"
 
+# eval
+eval_interval = config.diffusion_model.eval_interval
 
-def load_vae(
-      checkpoint_path: str, 
-      in_channels: int, 
-      latent_dim: int, 
-      out_channels: int, 
-      device: torch.device
-):
+
+def load_vae(checkpoint_path: str, device: torch.device):
     if vae_name == 'vae_resnet':
+        print("VAE model name: vae_resnet")
         model = VAEResNet(
+            image_size=image_size,
             in_channels=input_channels,
             out_channels=output_channels,
             latent_dim=z_dim,
@@ -65,6 +67,7 @@ def load_vae(
             dropout_p=dropout_p
         ).to(device)
     elif vae_name == 'vae_unet':
+        print("VAE model name: vae_unet")
         model = VAEUnet(
             in_channels=input_channels,
             latent_dim=z_dim,
@@ -72,9 +75,7 @@ def load_vae(
         ).to(device)
     else:
         raise ValueError(f"Unknown vae model: {vae_name}")
-    # Handle .pth checkpoint loading with proper security
     try:
-        # Add safe globals for numpy objects commonly found in PyTorch checkpoints
         import numpy as np
         safe_globals = [
             np.core.multiarray.scalar,
@@ -123,19 +124,81 @@ def loss_function(z_predict, z_origin):
     return F.mse_loss(z_predict, z_origin, reduction='mean')
 
 
+@torch.no_grad()
+def evaluate_model(model, vae_model, gaussian_diffusion, device):
+    """Run evaluation on test dataset."""
+    print("\n[INFO] Running evaluation...")
+
+    # Load test dataset
+    test_loader = load_mvtec_test_dataset(
+        dataset_root_dir=mvtec_data_dir,
+        category=category_name,
+        image_size=image_size,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+
+    # Set models to eval mode
+    model.eval()
+    vae_model.eval()
+
+    # Accumulators
+    labels_all: List[int] = []
+    img_scores_all: List[float] = []
+    maps_all: List[torch.Tensor] = []
+    gts_all: List[torch.Tensor] = []
+
+    # Fixed t for inference (can be tuned). Use moderately noisy step.
+    infer_t = max(1, int(0.4 * num_timesteps))
+
+    for batch in tqdm(test_loader, desc="Evaluating", leave=False):
+        images = batch['image'].to(device)
+        masks = batch['mask'].to(device)  # [B,1,H,W]
+        labels = batch['label']  # list/int/tensor
+
+        # VAE reconstruction
+        recon_vae, _, _ = vae_model(images)
+
+        # Add noise at step t and denoise via UNet to predict x0
+        B = images.size(0)
+        t = torch.full((B,), infer_t, dtype=torch.long, device=device)
+        noise = torch.randn_like(recon_vae)
+        x_t = gaussian_diffusion.q_sample(recon_vae, t, noise)
+        pred_noise = model(x_t, t)
+        recon = gaussian_diffusion.predict_start_from_noise(x_t, t, pred_noise).clamp(0, 1)
+
+        # Anomaly map and image-level score
+        anomaly_map = compute_anomaly_map(images, recon)  # [B,H,W]
+        image_scores = anomaly_map.view(B, -1).max(dim=1).values  # max pooling
+
+        # Accumulate
+        labels_all.extend(to_label_list(labels))
+        img_scores_all.extend(image_scores.detach().cpu().tolist())
+        maps_all.extend(list(anomaly_map.detach().cpu()))
+        gts_all.extend(list(masks.detach().cpu().squeeze(1)))
+
+    # Calculate metrics
+    img_auroc = eval_auroc_image(labels_all, img_scores_all)
+    px_auroc = eval_auroc_pixel(maps_all, gts_all)
+
+    print(f"[EVAL] Image AUROC: {img_auroc:.4f}, Pixel AUROC: {px_auroc:.4f}")
+
+    return img_auroc, px_auroc
+
+
 def main(batch_size=batch_size):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[INFO] Using device: {device}")
+    print("=*200")
+    print(f"Using device: {device}")
+    print("Category: ", category_name)
+    print("=*200")
+
+    os.makedirs(pretrained_save_dir, exist_ok=True)
+    os.makedirs(train_result_dir, exist_ok=True)
 
     # Load VAE model
     print("[INFO] Loading VAE model...")
-    vae_model = load_vae(
-        checkpoint_path=phase1_vae_pretrained_path,
-        in_channels=input_channels,
-        latent_dim=z_dim,
-        out_channels=output_channels,
-        device=device
-    )
+    vae_model = load_vae(checkpoint_path=phase1_vae_pretrained_path,device=device)
 
     # Load dataset
     print("[INFO] Loading dataset...")
@@ -150,13 +213,12 @@ def main(batch_size=batch_size):
     print("[INFO] Initializing UNet model...")
     model = UNetModel(
         img_size=image_size,
-        base_channels=128,
-        conv_resample=True,
-        n_heads=1,
-        n_head_channels=64,
-        channel_mults=(1, 1, 2, 2, 4, 4),
+        base_channels=32,
+        n_heads=2,
+        # n_head_channels=64,
+        # channel_mults=(1, 1, 2, 2, 4, 4),
         num_res_blocks=2,
-        dropout=0.0,
+        dropout=0.1,
         attention_resolutions="32,16,8",
         biggan_updown=True,
         in_channels=input_channels,
@@ -175,6 +237,13 @@ def main(batch_size=batch_size):
     start_epoch = 0
     total_epochs = epochs
     loss_history = []
+    eval_history = {'img_auroc': [], 'px_auroc': [], 'epochs': []}
+
+    # Init eval
+    # img_auroc, px_auroc = evaluate_model(model, vae_model, gaussian_diffusion, device)
+    eval_history['img_auroc'] = []
+    eval_history['px_auroc'] = []
+    eval_history['epochs'].append(0)
 
     print(f"Starting training for {total_epochs} epochs...")
     # Main epoch progress bar
@@ -182,6 +251,7 @@ def main(batch_size=batch_size):
 
     for epoch in epoch_bar:
         model.train()
+        vae_model.eval()
         epoch_start_time = time.time()
         batch_losses = []
         batch_bar = tqdm(train_dataset,desc=f"Epoch {epoch + 1}/{total_epochs}",position=1,leave=False,)
@@ -191,7 +261,7 @@ def main(batch_size=batch_size):
 
             # Get reconstruct image from vae model phase 1
             with torch.no_grad():
-                vae_reconstructed = vae_model(images)
+                vae_reconstructed, _, _ = vae_model(images)
 
             B = images.size(0)
             t = torch.randint(0, num_timesteps, (B,), device=device)
@@ -199,22 +269,13 @@ def main(batch_size=batch_size):
             # x_t: add noise
             x_t = gaussian_diffusion.q_sample(vae_reconstructed, t, noise)
 
-            # x_t = x_t.view(-1, 16, 4, 4)
-            # print("[INFO] Z_view shape:", z.shape)
-
             # Predict noise
             pred_noise = model(x_t, t)
 
-            #print(f"pred_noise mean={pred_noise.mean().item()}, std={pred_noise.std().item()}")
-            #print(f"true_noise mean={noise.mean().item()}, std={noise.std().item()}")
-
-            # x_predict = gaussian_diffusion.predict_start_from_noise(x_t, t, pred_noise)
-            # reconstructed = x_predict.reshape(batch_size, -1)
-            # print("[INFO] z_predict shape:", z_predict.shape)
+            x_pred = gaussian_diffusion.predict_start_from_noise(x_t, t, pred_noise)
 
             # Calculate loss
-            # total_loss = loss_function(reconstructed, images)
-            total_loss = F.mse_loss(pred_noise, noise)
+            total_loss = F.mse_loss(x_pred, images)
             batch_losses.append(total_loss.item())
 
             # Backward pass
@@ -222,9 +283,6 @@ def main(batch_size=batch_size):
             total_loss.backward()
             optimizer.step()
 
-            # Update batch progress bar with current loss
-            # current_avg_loss = np.mean(batch_losses) # use 'sum'
-            # current_avg_loss = batch_losses
             batch_bar.set_postfix({
                 'Loss': f'{total_loss.item():.6f}',
                 'LR': f'{optimizer.param_groups[0]["lr"]:.2e}'
@@ -236,19 +294,45 @@ def main(batch_size=batch_size):
         epoch_time = time.time() - epoch_start_time
 
         scheduler.step()
+
+        eval_info = ""
+        if (epoch + 1) % eval_interval == 0 and epoch != 1 and epoch != 0:
+            img_auroc, px_auroc = evaluate_model(model, vae_model, gaussian_diffusion, device)
+            eval_history['img_auroc'].append(img_auroc)
+            eval_history['px_auroc'].append(px_auroc)
+            eval_history['epochs'].append(epoch + 1)
+            eval_info = f" | Img AUROC: {img_auroc:.4f} | Px AUROC: {px_auroc:.4f}"
+
         # Update epoch progress bar with comprehensive info
         epoch_bar.set_postfix({
-            'Epoch Loss': f'{epoch_loss:.6f}',
+            'Loss': f'{epoch_loss:.6f}',
             'Time': f'{epoch_time:.1f}s',
-            'LR': f'{optimizer.param_groups[0]["lr"]:.2e}'
+            'LR': f'{optimizer.param_groups[0]["lr"]:.2e}',
+            'Best Img AUROC': f'{max(eval_history["img_auroc"]):.4f}' if eval_history['img_auroc'] else 'N/A'
         })
 
         # Log epoch results
-        if (epoch + 1) % 10 == 0 or epoch == 0:
+        if (epoch + 1) % 10 == 0 and epoch != 1 and epoch != 0:
             print(f"\n[INFO] Epoch {epoch + 1}/{total_epochs} completed:")
             print(f"        Loss: {epoch_loss:.6f}")
             print(f"        Time: {epoch_time:.1f}s")
             print(f"        Learning Rate: {optimizer.param_groups[0]['lr']:.2e}")
+            if eval_info:
+                print(f"        {eval_info}")
+                eval_checkpoint = {
+                    'epoch': total_epochs,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'loss_history': loss_history,
+                    'config': {
+                        'image_size': image_size,
+                        'input_channels': input_channels,
+                        'num_timesteps': num_timesteps,
+                        'beta_schedule': beta_schedule
+                    }
+                }
+                torch.save(eval_checkpoint, os.path.join(pretrained_save_dir, f'diffusion_model_{epoch}_.pth'))
 
         # Save checkpoint periodically
         if (epoch + 1) % 50 == 0:
@@ -269,10 +353,22 @@ def main(batch_size=batch_size):
             torch.save(checkpoint, os.path.join(pretrained_save_dir, f'diffusion_model_epoch_{epoch+1}.pth'))
             print(f"[INFO] Checkpoint saved at epoch {epoch+1}")
 
+
+    # Final evaluation
+    print("\n[INFO] Running final evaluation...")
+    final_img_auroc, final_px_auroc = evaluate_model(model, vae_model, gaussian_diffusion, device)
+    eval_history['img_auroc'].append(final_img_auroc)
+    eval_history['px_auroc'].append(final_px_auroc)
+    eval_history['epochs'].append(total_epochs)
+
     # Training completed
     print(f"\n[INFO] Training completed!")
     print(f"        Final loss: {loss_history[-1]:.6f}")
     print(f"        Best loss: {min(loss_history):.6f}")
+    print(f"        Final Image AUROC: {final_img_auroc:.4f}")
+    print(f"        Final Pixel AUROC: {final_px_auroc:.4f}")
+    print(f"        Best Image AUROC: {max(eval_history['img_auroc']):.4f}")
+    print(f"        Best Pixel AUROC: {max(eval_history['px_auroc']):.4f}")
 
     # Save final model
     os.makedirs(pretrained_save_dir, exist_ok=True)
@@ -296,5 +392,7 @@ def main(batch_size=batch_size):
 if __name__ == "__main__":
     set_seed(seed)
     main()
+
+
 
 

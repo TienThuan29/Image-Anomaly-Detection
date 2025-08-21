@@ -8,29 +8,50 @@ from torchvision.models import resnet18, resnet34, resnet50
 class ResNetEncoder(nn.Module):
     def __init__(
             self,
+            image_size: int,
             in_channels: int,
             latent_dim: int,
             resnet_name: str,
+            pool_size: int = 4
     ):
         super(ResNetEncoder, self).__init__()
+        self.resnet_name = resnet_name
         if resnet_name == 'resnet18':
             self.resnet = resnet18(weights=None)
+            out_channels = 512
         elif resnet_name == 'resnet34':
             self.resnet = resnet34(weights=None)
+            out_channels = 512
         elif resnet_name == 'resnet50':
             self.resnet = resnet50(weights=None)
+            out_channels = 2048
         else:
             raise ValueError(f"Unsupported ResNet architecture: {resnet_name}")
 
-        # Remove the final fully connected layer and avgpool
         self.features = nn.Sequential(*list(self.resnet.children())[:-2])
+        # if resnet_name == 'resnet18':
+        #     self.flatten = nn.Flatten()
+        #     self.fc_mu = nn.Linear(512 * 8 * 8, latent_dim)
+        #     self.fc_var = nn.Linear(512 * 8 * 8, latent_dim)
+        # else:
+        #     self.pool = nn.AdaptiveAvgPool2d((pool_size, pool_size))
+        #     in_feat = out_channels * pool_size * pool_size
+        #     self.flatten = nn.Flatten()
+        #     self.fc_mu = nn.Linear(in_feat, latent_dim)
+        #     self.fc_var = nn.Linear(in_feat, latent_dim)
 
+        self.pool = nn.AdaptiveAvgPool2d((pool_size, pool_size))
+        in_feat = out_channels * pool_size * pool_size
         self.flatten = nn.Flatten()
-        self.fc_mu = nn.Linear(512 * 8 * 8, latent_dim)
-        self.fc_var = nn.Linear(512 * 8 * 8, latent_dim)
+        self.fc_mu = nn.Linear(in_feat, latent_dim)
+        self.fc_var = nn.Linear(in_feat, latent_dim)
+
 
     def forward(self, x_input: Tensor) -> tuple[Tensor, Tensor]:
         x = self.features(x_input)  # [ B, 512, 8, 8 ]
+        # if self.resnet_name != 'resnet18':
+        #     x = self.pool(x)
+        x = self.pool(x)
         x = self.flatten(x)         # [ B, 512 * 8 * 8 ]
         mu = self.fc_mu(x)          # [ B, latent_dim ]
         logvar = self.fc_var(x)     # [ B, latent_dim ]
@@ -100,6 +121,7 @@ class Decoder(nn.Module):
 class VAEResNet(nn.Module):
     def __init__(
             self,
+            image_size: int,
             in_channels: int,
             latent_dim: int,
             out_channels: int,
@@ -110,7 +132,7 @@ class VAEResNet(nn.Module):
         self.in_channels = in_channels
         self.latent_dim = latent_dim
         self.out_channels = out_channels
-        self.encoder = ResNetEncoder(in_channels=in_channels, latent_dim=latent_dim, resnet_name=resnet_name)
+        self.encoder = ResNetEncoder(in_channels=in_channels, latent_dim=latent_dim, resnet_name=resnet_name, image_size=image_size)
         self.decoder = Decoder(latent_dim=latent_dim, out_channels=out_channels, dropout_p=dropout_p)
 
     def encode(self, x_input: Tensor) -> tuple[Tensor, Tensor]:

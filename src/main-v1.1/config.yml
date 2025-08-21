@@ -9,7 +9,7 @@ data:
   
 general:
   seed: 42
-  batch_size: 16
+  batch_size: 8
   image_size: 256
   input_channels: 3
   output_channels: 3
@@ -17,18 +17,18 @@ general:
 
 vae_model:
   name: vae_resnet # vae_resnet, vae_unet
-  lr: 1e-4
+  lr: 3e-4
   epochs: 5000
   weight_decay: 1e-5
   z_dim: 256
   dropout_p: 0.1
   save_freq: 30
   sample_freq: 30
-  backbone: resnet34 # resnet18, resnet34, resnet50
+  backbone: resnet18 # resnet18, resnet34, resnet50
   optimizer_name: AdamW # Adam, SGD, AdamW
   train_result_base_dir: ./mvtec_phase1_vae/train_results/
   pretrained_save_base_dir: ./mvtec_phase1_vae/vae_pretrained/
-  resume_checkpoint:
+  resume_checkpoint: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_latest.pth
 
 diffusion_model:
   name: diffusion_model
@@ -42,11 +42,12 @@ diffusion_model:
   beta_schedule: linear # linear, cosine
   train_result_base_dir: ./mvtec_phase2_diffusion/train_results/
   pretrained_save_base_dir: ./mvtec_phase2_diffusion/diffu_pretrained/
-  phase1_vae_pretrained_path: 
+  phase1_vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_early_stop_epoch_3222.pth
+  eval_interval: 10
 
 early_stopping:
   is_early_stopping: True
-  patience: 20
+  patience: 30
   min_delta: 0.01
   smoothing_window: 5
 
@@ -61,3 +62,7 @@ diffusion_testing:
   diffusion_test_result_base_dir: 
   diffusion_model_path: 
   diffusion_vae_model_path:
+
+
+# VAE
+# cable : 3e-4

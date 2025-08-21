@@ -1,1 +1,0 @@
-cate grid có vấn đề, có vẻ bị overfit, reconstruct không tốt => save model sau 100 epochs và test reconstruct 

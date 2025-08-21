@@ -40,8 +40,10 @@ optimizer_name = config.vae_model.optimizer_name
 resume_checkpoint_path = config.vae_model.resume_checkpoint
 
 # save train result dir
-train_result_dir = config.vae_model.train_result_base_dir + vae_name + "/" + category_name + "/"
-pretrained_save_dir = config.vae_model.pretrained_save_base_dir + vae_name + "/" + category_name + "/"
+sub_path = f"{backbone}/" if vae_name == "vae_resnet" else ""
+train_result_dir = f"{config.vae_model.train_result_base_dir}{vae_name}/{sub_path}{category_name}/"
+pretrained_save_dir = f"{config.vae_model.pretrained_save_base_dir}{vae_name}/{sub_path}{category_name}/"
+
 
 # early stopping
 patience = config.early_stopping.patience
@@ -56,7 +58,6 @@ def set_seed(seed):
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
     os.environ['PYTHONHASHSEED'] = str(seed)
-
 
 def vae_loss_function(
         x_hat: Tensor,
@@ -77,6 +78,15 @@ def vae_loss_function(
 #     kld = -0.5 * torch.mean(1 + log_var - mu**2 - log_var.exp())
 #     return mse + kld, mse, kld
 
+# def vae_loss_function(x_hat, x, mu, log_var, beta=1.0):
+#     B = x.size(0)
+#     # recon per-sample: sum over pixels/channels (H*W*C), shape [B]
+#     recon = F.mse_loss(x_hat, x, reduction='none').view(B, -1).sum(dim=1)
+#     # KL per-sample: sum over latent dims, shape [B]
+#     kl = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
+#
+#     loss = (recon + beta * kl).mean()
+#     return loss, recon.mean(), kl.mean()
 
 def save_checkpoint(model, optimizer, scheduler, epoch, loss_epoch, best_loss,
                     category_name, save_dir, checkpoint_type="best"):
@@ -131,6 +141,10 @@ def main(resume_from_checkpoint=None, batch_size=batch_size):
     device = torch.device(f"cuda:{cuda}" if cuda >= 0 and torch.cuda.is_available() else "cpu")
     print(f'Training VAE on class: {category_name}')
     print(f"Device: {device}")
+    print(f"Batch size: {batch_size}")
+    print(f"VAE name: {vae_name}")
+    if vae_name == "vae_resnet":
+        print(f"Backbone: {backbone}")
 
     train_dataset = load_mvtec_train_dataset(
         dataset_root_dir=mvtec_data_dir,
@@ -141,6 +155,7 @@ def main(resume_from_checkpoint=None, batch_size=batch_size):
 
     if vae_name == 'vae_resnet':
         model = VAEResNet(
+            image_size=image_size,
             in_channels=input_channels,
             out_channels=output_channels,
             latent_dim=z_dim,
@@ -151,7 +166,8 @@ def main(resume_from_checkpoint=None, batch_size=batch_size):
         model = VAEUnet(
             in_channels=input_channels,
             latent_dim=z_dim,
-            out_channels=output_channels
+            out_channels=output_channels,
+            dropout_p=dropout_p
         ).to(device)
     else:
         raise ValueError(f"Unknown vae model: {vae_name}")
@@ -216,7 +232,6 @@ def main(resume_from_checkpoint=None, batch_size=batch_size):
         batch_bar = tqdm(train_dataset, desc=f"Epoch {epoch + 1}/{epochs}", leave=False, position=1)
         for batch_idx, batch in enumerate(batch_bar):
             images = batch['image'].to(device)
-            batch_size = images.size(0)
 
             # Forward
             reconstructed, mu, log_var = model(images)
