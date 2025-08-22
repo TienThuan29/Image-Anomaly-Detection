@@ -11,6 +11,6 @@ gdown
 # timm>=0.6.0
 
 # Development dependencies (optional)
-# matplotlib>=3.5.0  # For visualization
+matplotlib>=3.5.0  # For visualization
 # tensorboard>=2.8.0  # For training logs
 # wandb>=0.12.0  # For experiment tracking 

@@ -17,7 +17,7 @@ general:
 
 vae_model:
   name: vae_resnet # vae_resnet, vae_unet
-  lr: 3e-4
+  lr: 1e-4
   epochs: 5000
   weight_decay: 1e-5
   z_dim: 256
@@ -28,13 +28,15 @@ vae_model:
   optimizer_name: AdamW # Adam, SGD, AdamW
   train_result_base_dir: ./mvtec_phase1_vae/train_results/
   pretrained_save_base_dir: ./mvtec_phase1_vae/vae_pretrained/
-  resume_checkpoint: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_latest.pth
+  resume_checkpoint:
 
 diffusion_model:
   name: diffusion_model
   z_dim: 256
-  lr: 1e-4
-  epochs: 500
+  lr: 3e-4
+  epochs: 1000
+  beta_start: 0.0001
+  beta_end: 0.02
   num_timesteps: 1000
   dropout_p: 0.1
   weight_decay: 1e-5
@@ -44,25 +46,43 @@ diffusion_model:
   pretrained_save_base_dir: ./mvtec_phase2_diffusion/diffu_pretrained/
   phase1_vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_early_stop_epoch_3222.pth
   eval_interval: 10
+  # Noise guidance
+  guidance_w: 0.5
+  infer_t_ratio: 0.4
+  infer_skip:
+  test_trajectoy_steps: 250   # Starting point for denoining trajectory.
+  skip: 25 # Number of steps to skip for denoising trajectory.
+  eta : 1 # Stochasticity parameter for denoising process.
+  w : 2 # Conditioning parameter. The higher the value, the more the model is conditioned on the target image. "Fine tuninig this parameter results in better performance".
 
 early_stopping:
   is_early_stopping: True
-  patience: 30
+  patience: 50
   min_delta: 0.01
   smoothing_window: 5
 
 vae_testing:
   name: vae_resnet # vae_resnet, vae_unet
-  category: bottle
+  category: cable
   vae_test_result_base_dir: ./mvtec_phase1_vae/vae_testing/
-  vae_model_path: 
+  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
 
 diffusion_testing:
-  category: bottle
-  diffusion_test_result_base_dir: 
-  diffusion_model_path: 
-  diffusion_vae_model_path:
+  category: cable
+  diffusion_test_result_base_dir: ./mvtec_phase2_diffusion/diffusion_testing/
+  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase2_diffusion/diffu_pretrained/cable/diffusion_model_final.pth
+  diffusion_vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
+  # Visualization settings
+  save_visualizations: True
+  max_visualization_batches: 5
+  max_images_per_batch: 8
 
 
 # VAE
 # cable : 3e-4
+# bootle : 9e-5
+# carpet: 1e-4
+# leather: 9e-5
+# capsule: 1e-4
+# grid: 3e-4
+# hazelnut: 1e-4
