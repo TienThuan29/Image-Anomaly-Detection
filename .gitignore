@@ -111,4 +111,6 @@ coverage.xml
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json 
+dmypy.json
+
+mvtec_phase2_diffusion/

@@ -46,6 +46,10 @@ diffusion_model:
   pretrained_save_base_dir: ./mvtec_phase2_diffusion/diffu_pretrained/
   phase1_vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/bottle/bottle_vae_best.pth
   eval_interval: 10
+  reconstruction:
+    strength: 0.3
+    steps: 70
+    eta: 0.0
 
 early_stopping:
   is_early_stopping: True

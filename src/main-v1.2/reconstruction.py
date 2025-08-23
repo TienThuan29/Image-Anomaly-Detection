@@ -1,5 +1,11 @@
 from typing import List
 import torch
+from config import load_config
+
+config = load_config()
+_strength = config.diffusion_model.reconstruction.strength # độ mạnh của noise được bắt đầu từ strength
+_steps = config.diffusion_model.reconstruction.steps
+_eta = config.diffusion_model.reconstruction.eta
 
 class Reconstruction:
 
@@ -10,15 +16,11 @@ class Reconstruction:
 
     @torch.no_grad()
     def __call__(self, x):
-        strength = 0.3 # độ mạnh của noise được bắt đầu từ
-        steps = 70
-        eta = 0.0
-
         B = x.size(0)
         T = self.gaussian_diffusion.num_timesteps
-        t0 = int(min(T - 1, max(1, int(strength * T))))
+        t0 = int(min(T - 1, max(1, int(_strength * T))))
 
-        step = max(1, t0 // steps)
+        step = max(1, t0 // _steps)
         seq = list(range(t0, -1, -step))
         if seq[-1] != 0: seq.append(0)
 
@@ -42,12 +44,12 @@ class Reconstruction:
             # Ước lượng x0 tại t_i (chuẩn DDIM/DDPM)
             x0 = (xt - sqrt_one_minus_ai * e) / torch.sqrt(a_i + 1e-8)
 
-            if eta == 0.0:
+            if _eta == 0.0:
                 # DDIM deterministic
                 xt = torch.sqrt(a_j) * x0 + sqrt_one_minus_aj * e
             else:
                 # DDIM stochastic
-                sigma = eta * torch.sqrt(
+                sigma = _eta * torch.sqrt(
                     (1 - a_j) / (1 - a_i + 1e-8) * (1 - a_i / (a_j + 1e-8) + 1e-8)
                 )
                 c = torch.sqrt(torch.clamp(1 - a_j - sigma ** 2, min=0.0))
