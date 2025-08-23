@@ -1,18 +1,20 @@
+import os
 import time
+
+import numpy as np
 import torch
 import random
 from diffusion_gaussian import GaussianDiffusion
-from utils import load_mvtec_train_dataset, load_mvtec_test_dataset
+from utils import load_mvtec_train_dataset
 from diffusion_model import UNetModel
 from tqdm import tqdm
 from config import load_config
 from utils import get_optimizer, load_vae
-from reconstruction import Reconstruction
-from inference_v2 import compute_anomaly_map, eval_auroc_image, eval_auroc_pixel, to_label_list, to_batch_tensor
-from visualization_report import *
+from inference import evaluate_model
+from visualization_report import log_evaluation_results, create_realtime_visualization, create_evaluation_visualizations, create_evaluation_report, save_training_summary
 from loss_functions import diffusion_loss_function
 
-config = load_config("config.yml")
+config = load_config()
 
 # general
 _seed = config.general.seed
@@ -42,7 +44,6 @@ _num_timesteps = config.diffusion_model.num_timesteps
 _optimizer_name = config.diffusion_model.optimizer_name
 _beta_schedule = config.diffusion_model.beta_schedule
 _phase1_vae_pretrained_path = config.diffusion_model.phase1_vae_pretrained_path
-_w = config.diffusion_model.w
 
 # save train results
 _train_result_dir = config.diffusion_model.train_result_base_dir + _category_name + "/"
@@ -60,62 +61,6 @@ def set_seed(seed):
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
     os.environ['PYTHONHASHSEED'] = str(seed)
-
-
-@torch.no_grad()
-def evaluate_model(model, vae_model, gaussian_diffusion, device):
-    print("\n[INFO] Running evaluation ...")
-    test_loader = load_mvtec_test_dataset(
-        dataset_root_dir=_mvtec_data_dir,
-        category=_category_name,
-        image_size=_image_size,
-        batch_size=_batch_size,
-        shuffle=False,
-    )
-    model.eval()
-    vae_model.eval()
-
-    labels_all: List[int] = []
-    img_scores_all: List[float] = []
-    maps_all: List[torch.Tensor] = []
-    gts_all: List[torch.Tensor] = []
-
-    for batch in tqdm(test_loader, desc="Evaluating", leave=False):
-        images = batch['image'].to(device)
-        masks = batch['mask'].to(device)  # [B,1,H,W]
-        labels = batch['label']          # list/int/tensor
-        # VAE reconstruction
-        recon_vae, _, _ = vae_model(images)
-        # Guided reconstruction using diffusion UNet
-        reconstruction = Reconstruction(unet=model, gaussian_diffusion=gaussian_diffusion, device=device)
-        images_reconstructed = reconstruction(
-            x = recon_vae,
-            y0 = images,
-            w = _w
-        )
-        # Convert list to tensor
-        images_reconstructed = to_batch_tensor(images_reconstructed, images)
-
-        # Anomaly map and image-level score
-        B = images.size(0)
-        anomaly_map = compute_anomaly_map(images, images_reconstructed)  # output: [B,H,W]
-
-        # lấy MAX, MEAN, STD, xem cái nào có kết quả tốt nhất?
-        # image_scores = anomaly_map.view(B, -1).max(dim=1).values    # MAX
-        image_scores = anomaly_map.float().mean(dim=(1, 2))         # MEAN
-
-        # Accumulate
-        labels_all.extend(to_label_list(labels))
-        img_scores_all.extend(image_scores.detach().cpu().tolist())
-        maps_all.extend(list(anomaly_map.detach().cpu()))
-        gts_all.extend(list(masks.detach().cpu().squeeze(1)))
-
-    # Calculate metrics
-    img_auroc = eval_auroc_image(labels_all, img_scores_all)
-    px_auroc = eval_auroc_pixel(maps_all, gts_all)
-
-    print(f"[EVAL] Image AUROC: {img_auroc:.4f}, Pixel AUROC: {px_auroc:.4f}")
-    return img_auroc, px_auroc
 
 
 def main():
@@ -240,7 +185,7 @@ def main():
             eval_history['img_auroc'].append(img_auroc)
             eval_history['px_auroc'].append(px_auroc)
             eval_history['epochs'].append(epoch + 1)
-            eval_info = f" | Img AUROC: {img_auroc:.4f} | Px AUROC: {px_auroc:.4f}"
+            eval_info = f"Img AUROC: {img_auroc:.4f}, Px AUROC: {px_auroc:.4f}"
             
             # Debug: Print current evaluation history lengths
             print(f"[DEBUG] Evaluation history lengths - epochs: {len(eval_history['epochs'])}, img_auroc: {len(eval_history['img_auroc'])}, px_auroc: {len(eval_history['px_auroc'])}")
@@ -254,7 +199,6 @@ def main():
                 eval_history=eval_history,
                 log_dir=_train_result_dir
             )
-            
             # Update real-time visualization
             create_realtime_visualization(
                 eval_history=eval_history,
@@ -365,8 +309,7 @@ def main():
         'dropout_p': _dropout_p,
         'optimizer_name': _optimizer_name,
         'vae_name': _vae_name,
-        'backbone': _backbone,
-        'w': _w
+        'backbone': _backbone
     }
     
     save_training_summary(
@@ -409,7 +352,3 @@ def main():
 if __name__ == "__main__":
     set_seed(_seed)
     main()
-
-
-
-

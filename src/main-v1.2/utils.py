@@ -108,7 +108,7 @@ def load_mvtec_train_dataset(
         category: str,
         image_size: int,
         batch_size: int,
-        num_workers: int = 1,
+        num_workers: int = 2,
         shuffle: bool = True,
         pin_memory: bool = True,
         drop_last: bool = False
@@ -139,7 +139,7 @@ def load_mvtec_test_dataset(
         category: str,
         image_size: int,
         batch_size: int,
-        num_workers: int = 1,
+        num_workers: int = 2,
         shuffle: bool = False,
         pin_memory: bool = True,
         drop_last: bool = False
@@ -169,7 +169,7 @@ def load_mvtec_only_good_test_dataset(
         category: str,
         image_size: int,
         batch_size: int,
-        num_workers: int = 1,
+        num_workers: int = 2,
         shuffle: bool = False,
         pin_memory: bool = True,
         drop_last: bool = False

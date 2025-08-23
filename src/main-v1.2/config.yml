@@ -1,8 +1,8 @@
 data:
-  name: mvtec # mvtect, visa
+  name: mvtec # mvtect, mvtect loco
   mvtec_data_dir: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/datasets/mvtec_anomaly_detection
   visa_data_dir:
-  category: cable
+  category: bottle
   mask: True
   # mvtec: ['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
   # visa: ['candle', 'capsules', 'cashew', 'chewinggum', 'fryum', 'macaroni1', 'macaroni2', 'pcb1', 'pcb2' ,'pcb3', 'pcb4', 'pipe_fryum']
@@ -44,15 +44,8 @@ diffusion_model:
   beta_schedule: linear # linear, cosine
   train_result_base_dir: ./mvtec_phase2_diffusion/train_results/
   pretrained_save_base_dir: ./mvtec_phase2_diffusion/diffu_pretrained/
-  phase1_vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/bottle/bottle_vae_best.pth
+  phase1_vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/bottle/bottle_vae_best.pth
   eval_interval: 10
-  #
-  guidance_w: 0.5
-  infer_t_ratio: 0.4
-  test_trajectoy_steps: 250   # Starting point for denoining trajectory.
-  skip: 50 # Number of steps to skip for denoising trajectory.
-  eta : 0 # Stochasticity parameter for denoising process.
-  w : 2 # Conditioning parameter. The higher the value, the more the model is conditioned on the target image. "Fine tuninig this parameter results in better performance".
 
 early_stopping:
   is_early_stopping: True
@@ -64,13 +57,15 @@ vae_testing:
   name: vae_resnet # vae_resnet, vae_unet
   category: cable
   vae_test_result_base_dir: ./mvtec_phase1_vae/vae_testing/
-  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
+  vae_model_path:
 
 diffusion_testing:
   category: cable
+  # Image score type name
+  image_score_type_name: mean # max, mean, std
   diffusion_test_result_base_dir: ./mvtec_phase2_diffusion/diffusion_testing/
-  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase2_diffusion/diffu_pretrained/cable/diffusion_model_epoch_700.pth
-  diffusion_vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.1/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
+  diffusion_model_path:
+  diffusion_vae_model_path:
   # Visualization settings
   save_visualizations: True
   max_visualization_batches: 5
