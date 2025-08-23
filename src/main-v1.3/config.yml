@@ -9,7 +9,7 @@ data:
   
 general:
   seed: 42
-  batch_size: 8
+  batch_size: 2
   image_size: 256
   input_channels: 3
   output_channels: 3
@@ -50,8 +50,6 @@ diffusion_model:
     strength: 0.3
     steps: 70
     eta: 0.0
-  resume_training: True
-  resume_checkpoint_path:
 
 early_stopping:
   is_early_stopping: True
@@ -61,17 +59,17 @@ early_stopping:
 
 vae_testing:
   name: vae_resnet # vae_resnet, vae_unet
-  category: bottle
+  category: cable
   vae_test_result_base_dir: ./mvtec_phase1_vae/vae_testing/
   vae_model_path:
 
 diffusion_testing:
-  category: bottle
+  category: cable
   # Image score type name
-  image_score_type_name: std # max, mean, std
+  image_score_type_name: mean # max, mean, std
   diffusion_test_result_base_dir: ./mvtec_phase2_diffusion/diffusion_testing/
-  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase2_diffusion/diffu_pretrained/bottle/diffusion_model_epoch_1000.pth
-  diffusion_vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/bottle/bottle_vae_best.pth
+  diffusion_model_path:
+  diffusion_vae_model_path:
   # Visualization settings
   save_visualizations: True
   max_visualization_batches: 5

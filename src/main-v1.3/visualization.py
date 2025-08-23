@@ -1,6 +1,6 @@
 import os
 from typing import Dict
-from PIL import Image
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
