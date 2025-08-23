@@ -114,9 +114,9 @@ def calc_image_score(anomaly_map):
     if _image_score_type_name == 'max':
         return anomaly_map.amax(dim=(1, 2))
     elif _image_score_type_name == 'mean':
-        anomaly_map.float().mean(dim=(1, 2))
+        return anomaly_map.float().mean(dim=(1, 2))
     elif _image_score_type_name == 'std':
-        anomaly_map.float().std(dim=(1, 2), unbiased=False)
+        return anomaly_map.float().std(dim=(1, 2), unbiased=False)
     else:
         raise ValueError(f"Unsupported score type: {_image_score_type_name}")
 
