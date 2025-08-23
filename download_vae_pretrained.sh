@@ -1,1 +1,1 @@
-gdown --fuzzy "https://drive.google.com/drive/folders/1IkO5MatgMC65FnXeSdNRyiliSM4fjJH8?usp=sharing" -O pre-trained.zip
+gdown --fuzzy --folder "https://drive.google.com/drive/folders/1IkO5MatgMC65FnXeSdNRyiliSM4fjJH8?usp=sharing" -O pre-trained
