@@ -8,7 +8,8 @@ import os
 from tqdm import tqdm
 from loss_functions import vae_loss_function
 from vae_unet_model import VAEUnet
-from vae_resnet_model import VAEResNet
+# from vae_resnet_model import VAEResNet
+from vae_resnet_skip_model import VAEResNetWithSkip
 from config import load_config
 from utils import  load_mvtec_train_dataset, LossEarlyStopping, get_optimizer
 
@@ -126,7 +127,7 @@ def main(resume_from_checkpoint=None):
     )
 
     if vae_name == 'vae_resnet':
-        model = VAEResNet(
+        model = VAEResNetWithSkip(
             image_size=_image_size,
             in_channels=input_channels,
             out_channels=output_channels,

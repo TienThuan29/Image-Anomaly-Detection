@@ -19,7 +19,7 @@ _output_channels = config.general.output_channels
 _device = torch.device(f"cuda:{config.general.cuda}" if torch.cuda.is_available() else "cpu")
 
 # Data settings
-_category_name = config.data.category
+_category_name = config.diffusion_testing.category
 _mvtec_data_dir = config.data.mvtec_data_dir
 
 # VAE settings
@@ -174,11 +174,11 @@ def run_inference_with_visualization():
         images = batch['image'].to(_device)
         masks = batch['mask'].to(_device)  # [B,1,H,W]
         labels = batch['label']
-
-        print(f"\nBatch {batch_idx}:")
-        print(f"  Images shape: {images.shape}")
-        print(f"  Masks shape: {masks.shape}")
-        print(f"  Labels: {labels}")
+        #
+        # print(f"\nBatch {batch_idx}:")
+        # print(f"  Images shape: {images.shape}")
+        # print(f"  Masks shape: {masks.shape}")
+        # print(f"  Labels: {labels}")
 
         # vae reconstruction
         recon_vae, _, _ = vae_model(images)

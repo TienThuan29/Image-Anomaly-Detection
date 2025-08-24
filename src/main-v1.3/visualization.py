@@ -5,6 +5,8 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+from PIL import Image
+
 
 def normalize_image(image: np.ndarray) -> np.ndarray:
     """Normalize image to [0, 1] range."""

@@ -2,7 +2,7 @@ data:
   name: mvtec # mvtect, mvtect loco
   mvtec_data_dir: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/datasets/mvtec_anomaly_detection
   visa_data_dir:
-  category: bottle
+  category: cable
   mask: True
   # mvtec: ['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
   # visa: ['candle', 'capsules', 'cashew', 'chewinggum', 'fryum', 'macaroni1', 'macaroni2', 'pcb1', 'pcb2' ,'pcb3', 'pcb4', 'pipe_fryum']
@@ -17,7 +17,7 @@ general:
 
 vae_model:
   name: vae_resnet # vae_resnet, vae_unet
-  lr: 1e-4
+  lr: 3e-4
   epochs: 5000
   weight_decay: 1e-5
   z_dim: 256
@@ -26,8 +26,8 @@ vae_model:
   sample_freq: 30
   backbone: resnet18 # resnet18, resnet34, resnet50
   optimizer_name: AdamW # Adam, SGD, AdamW
-  train_result_base_dir: ./mvtec_phase1_vae/train_results/
-  pretrained_save_base_dir: ./mvtec_phase1_vae/vae_pretrained/
+  train_result_base_dir: ./mvtec_phase1_vae_skip/train_results/
+  pretrained_save_base_dir: ./mvtec_phase1_vae_skip/vae_pretrained/
   resume_checkpoint:
 
 diffusion_model:
@@ -61,16 +61,16 @@ early_stopping:
 
 vae_testing:
   name: vae_resnet # vae_resnet, vae_unet
-  category: bottle
-  vae_test_result_base_dir: ./mvtec_phase1_vae/vae_testing/
-  vae_model_path:
+  category: cable
+  vae_test_result_base_dir: ./mvtec_phase1_vae_skip/vae_testing/
+  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae_skip/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
 
 diffusion_testing:
   category: bottle
   # Image score type name
   image_score_type_name: std # max, mean, std
   diffusion_test_result_base_dir: ./mvtec_phase2_diffusion/diffusion_testing/
-  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase2_diffusion/diffu_pretrained/bottle/diffusion_model_epoch_1000.pth
+  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase2_diffusion/diffu_pretrained/bottle/diffusion_model_610_.pth
   diffusion_vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/bottle/bottle_vae_best.pth
   # Visualization settings
   save_visualizations: True
