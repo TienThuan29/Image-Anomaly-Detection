@@ -1,6 +1,5 @@
 import os
 import time
-
 import numpy as np
 import torch
 import random
@@ -153,6 +152,8 @@ def main():
             noise = torch.randn_like(vae_reconstructed).to(device)
             # x_t: add noise
             x_t = gaussian_diffusion.q_sample(vae_reconstructed, t, noise)
+
+            # print("x_t shape: ", x_t.shape)
 
             # Predict noise
             pred_noise = model(x_t, t)

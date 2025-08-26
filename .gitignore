@@ -114,3 +114,6 @@ coverage.xml
 dmypy.json
 
 mvtec_phase2_diffusion/
+temp/
+.temp
+temp/*

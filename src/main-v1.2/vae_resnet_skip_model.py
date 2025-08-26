@@ -154,7 +154,7 @@ class DecoderWithSkip(nn.Module):
         # Upsampling blocks với skip connections
         # 8→16→32→64→128→256
         self.up1 = UpBlockWithSkip(512, 256, 256, groups=8, dropout_p=dropout_p)  # 8x8->16x16, skip từ layer3
-        self.up2 = UpBlockWithSkip(256, 128, 128, groups=8, dropout_p=dropout_p)  # 16x16->32x32, skip từ layer2
+        self.up2 = UpBlock(256, 128, groups=8, dropout_p=dropout_p)  # 16x16->32x32, skip từ layer2
         # self.up2 = UpBlock(256, 128, groups=8, dropout_p=dropout_p)
         self.up3 = UpBlock(128, 64, groups=8, dropout_p=dropout_p)  # 32x32->64x64, skip từ layer1
         # self.up4 = UpBlockWithSkip(64, 64, 32, groups=8, dropout_p=dropout_p)  # 64x64->128x128
@@ -181,7 +181,7 @@ class DecoderWithSkip(nn.Module):
 
         # Upsampling với skip connections (reverse order)
         x = self.up1(x, skip_features[3])  # [B, 256, 16, 16] + skip từ layer3
-        x = self.up2(x, skip_features[2])  # [B, 128, 32, 32] + skip từ layer2
+        x = self.up2(x)  # [B, 128, 32, 32] + skip từ layer2
         x = self.up3(x)  # [B, 64, 64, 64] + skip từ layer1
         x = self.up4(x)  # [B, 32, 128, 128] + skip từ conv1
         x = self.up5(x)  # [B, 16, 256, 256] no skip

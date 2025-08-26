@@ -8,7 +8,6 @@ from diffusion_model import UNetModel
 import inspect
 
 def _add_numpy_allowlist_for_safe_unpickler():
-    """Cho phép một số kiểu numpy phổ biến khi dùng weights_only=True (PyTorch 2.6)."""
     try:
         import numpy as np
         torch.serialization.add_safe_globals([
@@ -19,27 +18,18 @@ def _add_numpy_allowlist_for_safe_unpickler():
             np.bool_, np.int8, np.int16, np.uint8, np.uint16, np.uint32, np.uint64
         ])
     except Exception:
-        # Không có add_safe_globals ở phiên bản hiện tại hoặc lỗi khác -> bỏ qua
         pass
 
 def _torch_load_compat(path: str, map_location, allow_fallback_to_untrusted: bool = True):
-    """
-    Ưu tiên load an toàn với weights_only=True (PyTorch 2.6).
-    Nếu fail do safe-unpickler (vd numpy dtype), sẽ thử allowlist rồi thử lại.
-    Cuối cùng, nếu vẫn fail và bạn cho phép (allow_fallback_to_untrusted=True),
-    sẽ fallback sang weights_only=False (CẢNH BÁO: có rủi ro bảo mật nếu file không tin cậy).
-    """
     sig = inspect.signature(torch.load)
     supports_weights_only = 'weights_only' in sig.parameters
 
-    # 1) Thử safe load
     try:
         if supports_weights_only:
             return torch.load(path, map_location=map_location, weights_only=True)
         else:
             return torch.load(path, map_location=map_location)
     except Exception as e1:
-        # 2) Thử allowlist numpy và thử lại chế độ safe
         _add_numpy_allowlist_for_safe_unpickler()
         try:
             if supports_weights_only:
@@ -47,10 +37,8 @@ def _torch_load_compat(path: str, map_location, allow_fallback_to_untrusted: boo
             else:
                 return torch.load(path, map_location=map_location)
         except Exception as e2:
-            # 3) Fallback: chỉ dùng khi bạn TIN TƯỞNG checkpoint
             if supports_weights_only and allow_fallback_to_untrusted:
-                print("[WARN] Secure loading failed twice. Falling back to weights_only=False "
-                      "(ONLY do this for trusted checkpoints).")
+                print("[WARN] Secure loading failed twice. Falling back to weights_only=False ""(ONLY do this for trusted checkpoints).")
                 try:
                     return torch.load(path, map_location=map_location, weights_only=False)
                 except Exception as e3:
@@ -59,18 +47,12 @@ def _torch_load_compat(path: str, map_location, allow_fallback_to_untrusted: boo
                         f"Safe error #1: {e1}\nSafe error #2 (after allowlist): {e2}\n"
                         f"Fallback error: {e3}"
                     )
-            # Nếu không cho phép fallback:
             raise RuntimeError(
                 f"Failed to load checkpoint with safe mode and fallback disabled.\n"
                 f"Safe error #1: {e1}\nSafe error #2 (after allowlist): {e2}"
             )
 
 def _extract_state_dict(ckpt: dict):
-    """
-    Chấp nhận nhiều dạng checkpoint khác nhau:
-    - {'model_state_dict': ...} hoặc {'state_dict': ...} hoặc trực tiếp state_dict
-    - Tự bỏ tiền tố 'module.' (nn.DataParallel)
-    """
     if isinstance(ckpt, dict):
         if 'model_state_dict' in ckpt and isinstance(ckpt['model_state_dict'], dict):
             sd = ckpt['model_state_dict']
@@ -88,6 +70,8 @@ def _extract_state_dict(ckpt: dict):
             for k, v in sd.items()
         }
     return sd
+
+
 # ------------------------------------------------------------
 
 
@@ -110,7 +94,6 @@ def load_diffusion_unet(
         in_channels=in_channels,
     ).to(device)
 
-    # DÙNG loader tương thích 2.6
     ckpt = _torch_load_compat(checkpoint_path, map_location=device, allow_fallback_to_untrusted=True)
     state = _extract_state_dict(ckpt)
 

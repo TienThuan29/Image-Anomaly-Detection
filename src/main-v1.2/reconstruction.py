@@ -24,7 +24,6 @@ class Reconstruction:
         seq = list(range(t0, -1, -step))
         if seq[-1] != 0: seq.append(0)
 
-        # khởi tạo xt từ x đúng tại t0
         t_init = torch.full((B,), t0, device=self.device, dtype=torch.long)
         xt = self.gaussian_diffusion.q_sample(x, t_init, torch.randn_like(x))
         xs: List[torch.Tensor] = [xt]
@@ -38,17 +37,14 @@ class Reconstruction:
             sqrt_one_minus_ai = self.gaussian_diffusion._extract(self.gaussian_diffusion.sqrt_one_minus_alphas_cumprod, ti_t, xt.shape)
             sqrt_one_minus_aj = self.gaussian_diffusion._extract(self.gaussian_diffusion.sqrt_one_minus_alphas_cumprod, tj_t, xt.shape)
 
-            # dự đoán noise
             e = self.unet(xt, ti_t)
 
-            # Ước lượng x0 tại t_i (chuẩn DDIM/DDPM)
+            # Ước lượng x0 tại t_i
             x0 = (xt - sqrt_one_minus_ai * e) / torch.sqrt(a_i + 1e-8)
 
             if _eta == 0.0:
-                # DDIM deterministic
                 xt = torch.sqrt(a_j) * x0 + sqrt_one_minus_aj * e
             else:
-                # DDIM stochastic
                 sigma = _eta * torch.sqrt(
                     (1 - a_j) / (1 - a_i + 1e-8) * (1 - a_i / (a_j + 1e-8) + 1e-8)
                 )

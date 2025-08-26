@@ -8,7 +8,7 @@ import os
 from tqdm import tqdm
 from loss_functions import vae_loss_function
 from vae_unet_model import VAEUnet
-# from vae_resnet_model import VAEResNet
+from vae_resnet_model import VAEResNet
 from vae_resnet_skip_model import VAEResNetWithSkip
 from config import load_config
 from utils import  load_mvtec_train_dataset, LossEarlyStopping, get_optimizer
@@ -19,31 +19,31 @@ _seed = config.general.seed
 _cuda = config.general.cuda
 _image_size = config.general.image_size
 _batch_size = config.general.batch_size
-input_channels = config.general.input_channels
-output_channels = config.general.output_channels
+_input_channels = config.general.input_channels
+_output_channels = config.general.output_channels
 
 # data
-category_name = config.data.category
-mvtec_data_dir = config.data.mvtec_data_dir
-mask = config.data.mask
+_category_name = config.data.category
+_mvtec_data_dir = config.data.mvtec_data_dir
+_mask = config.data.mask
 
 # vae
-vae_name = config.vae_model.name
-epochs = config.vae_model.epochs
-z_dim = config.vae_model.z_dim
-lr = float(config.vae_model.lr)
-dropout_p = config.vae_model.dropout_p
-weight_decay = float(config.vae_model.weight_decay)
-save_freq = config.vae_model.save_freq
-sample_freq = config.vae_model.sample_freq
-backbone = config.vae_model.backbone # backbone for resnet
-optimizer_name = config.vae_model.optimizer_name
-resume_checkpoint_path = config.vae_model.resume_checkpoint
+_vae_name = config.vae_model.name
+_epochs = config.vae_model.epochs
+_z_dim = config.vae_model.z_dim
+_lr = float(config.vae_model.lr)
+_dropout_p = config.vae_model.dropout_p
+_weight_decay = float(config.vae_model.weight_decay)
+_save_freq = config.vae_model.save_freq
+_sample_freq = config.vae_model.sample_freq
+_backbone = config.vae_model.backbone # backbone for resnet
+_optimizer_name = config.vae_model.optimizer_name
+_resume_checkpoint_path = config.vae_model.resume_checkpoint
 
 # save train result dir
-sub_path = f"{backbone}/" if vae_name == "vae_resnet" else ""
-train_result_dir = f"{config.vae_model.train_result_base_dir}{vae_name}/{sub_path}{category_name}/"
-pretrained_save_dir = f"{config.vae_model.pretrained_save_base_dir}{vae_name}/{sub_path}{category_name}/"
+_sub_path = f"{_backbone}/"
+_train_result_dir = f"{config.vae_model.train_result_base_dir}{_vae_name}/{_sub_path}{_category_name}/"
+_pretrained_save_dir = f"{config.vae_model.pretrained_save_base_dir}{_vae_name}/{_sub_path}{_category_name}/"
 
 
 # early stopping
@@ -112,46 +112,46 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None, devi
 
 def main(resume_from_checkpoint=None):
     device = torch.device(f"cuda:{_cuda}" if _cuda >= 0 and torch.cuda.is_available() else "cpu")
-    print(f'Training VAE on class: {category_name}')
+    print(f'Training VAE on class: {_category_name}')
     print(f"Device: {device}")
     print(f"Batch size: {_batch_size}")
-    print(f"VAE name: {vae_name}")
-    if vae_name == "vae_resnet":
-        print(f"Backbone: {backbone}")
+    print(f"VAE name: {_vae_name}")
+    if _vae_name == "vae_resnet":
+        print(f"Backbone: {_backbone}")
 
     train_dataset = load_mvtec_train_dataset(
-        dataset_root_dir=mvtec_data_dir,
-        category=category_name,
+        dataset_root_dir=_mvtec_data_dir,
+        category=_category_name,
         image_size=_image_size,
         batch_size=_batch_size
     )
 
-    if vae_name == 'vae_resnet':
-        model = VAEResNetWithSkip(
+    if _vae_name == 'vae_resnet':
+        model = VAEResNet(
             image_size=_image_size,
-            in_channels=input_channels,
-            out_channels=output_channels,
-            latent_dim=z_dim,
-            resnet_name=backbone,
-            dropout_p=dropout_p
+            in_channels=_input_channels,
+            out_channels=_output_channels,
+            latent_dim=_z_dim,
+            resnet_name=_backbone,
+            dropout_p=_dropout_p
         ).to(device)
-    elif vae_name == 'vae_unet':
+    elif _vae_name == 'vae_unet':
         model = VAEUnet(
-            in_channels=input_channels,
-            latent_dim=z_dim,
-            out_channels=output_channels,
-            dropout_p=dropout_p
+            in_channels=_input_channels,
+            latent_dim=_z_dim,
+            out_channels=_output_channels,
+            dropout_p=_dropout_p
         ).to(device)
     else:
-        raise ValueError(f"Unknown vae model: {vae_name}")
+        raise ValueError(f"Unknown vae model: {_vae_name}")
 
     optimizer = get_optimizer(
-        optimizer_name=optimizer_name,
+        optimizer_name=_optimizer_name,
         params=model.parameters(),
-        lr=lr,
-        weight_decay=weight_decay
+        lr=_lr,
+        weight_decay=_weight_decay
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=_epochs)
 
     early_stopping = LossEarlyStopping(
         patience=patience,
@@ -160,15 +160,14 @@ def main(resume_from_checkpoint=None):
         verbose=True
     )
 
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Trainable parameters: {trainable_params}")
+    # trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # print(f"Trainable parameters: {trainable_params}")
 
-    if not os.path.exists(train_result_dir):
-        os.makedirs(train_result_dir)
-    if not os.path.exists(pretrained_save_dir):
-        os.makedirs(pretrained_save_dir)
+    if not os.path.exists(_train_result_dir):
+        os.makedirs(_train_result_dir)
+    if not os.path.exists(_pretrained_save_dir):
+        os.makedirs(_pretrained_save_dir)
 
-    # Khởi tạo các biến training
     start_epoch = 0
     loss_epoch = []
     best_loss = float('inf')
@@ -182,18 +181,18 @@ def main(resume_from_checkpoint=None):
         early_stopping.best_loss = best_loss
 
     # Log file
-    log_file_path = f'{train_result_dir}/{category_name}_training_evaluation_log.txt'
+    log_file_path = f'{_train_result_dir}/{_category_name}_training_evaluation_log.txt'
     log_mode = 'a' if resume_from_checkpoint else 'w'
     with open(log_file_path, log_mode) as log_file:
         if not resume_from_checkpoint:
-            log_file.write(f"Training Evaluation Log for {category_name}\n")
+            log_file.write(f"Training Evaluation Log for {_category_name}\n")
             log_file.write("=" * 50 + "\n\n")
         else:
             log_file.write(f"\nResuming training from epoch {start_epoch}\n")
             log_file.write("=" * 50 + "\n\n")
 
-    final_epoch = epochs
-    epoch_bar = tqdm(range(start_epoch, epochs), desc="Training Progress", position=0)
+    final_epoch = _epochs
+    epoch_bar = tqdm(range(start_epoch, _epochs), desc="Training Progress", position=0)
 
     for epoch in epoch_bar:
         model.train()
@@ -202,7 +201,7 @@ def main(resume_from_checkpoint=None):
         loss_batch = []
         num_batches = 0
 
-        batch_bar = tqdm(train_dataset, desc=f"Epoch {epoch + 1}/{epochs}", leave=False, position=1)
+        batch_bar = tqdm(train_dataset, desc=f"Epoch {epoch + 1}/{_epochs}", leave=False, position=1)
         for batch_idx, batch in enumerate(batch_bar):
             images = batch['image'].to(device)
 
@@ -231,17 +230,15 @@ def main(resume_from_checkpoint=None):
         epoch_loss = np.sum(loss_batch) / num_batches
         loss_epoch.append(epoch_loss)
 
-
         # save best model
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             save_checkpoint(model, optimizer, scheduler, epoch, loss_epoch, best_loss,
-                            category_name, pretrained_save_dir, "best")
+                            _category_name, _pretrained_save_dir, "best")
 
-        # Lưu latest checkpoint mỗi vài epochs
-        if (epoch + 1) % 30 == 0:  # Lưu mỗi 5 epochs
+        if (epoch + 1) % 30 == 0:
             save_checkpoint(model, optimizer, scheduler, epoch, loss_epoch, best_loss,
-                            category_name, pretrained_save_dir, "latest")
+                            _category_name, _pretrained_save_dir, "latest")
 
         # Check early stopping
         if early_stopping(epoch_loss):
@@ -250,7 +247,7 @@ def main(resume_from_checkpoint=None):
 
             # Lưu early stopping checkpoint
             early_stop_path = save_checkpoint(model, optimizer, scheduler, epoch, loss_epoch, best_loss,
-                                              category_name, pretrained_save_dir, "early_stop")
+                                              _category_name, _pretrained_save_dir, "early_stop")
 
             # Log early stopping event
             with open(log_file_path, 'a') as log_file:
@@ -263,7 +260,7 @@ def main(resume_from_checkpoint=None):
         scheduler.step()
 
         # Save sample reconstructions
-        if (epoch + 1) % sample_freq == 0:
+        if (epoch + 1) % _sample_freq == 0:
             model.eval()
             with torch.no_grad():
                 sample_batch = next(iter(train_dataset))
@@ -271,13 +268,13 @@ def main(resume_from_checkpoint=None):
                 sample_recon, _, _ = model(sample_images)
                 comparison = torch.cat([sample_images, sample_recon], dim=0)
                 save_image(comparison,
-                           f'{train_result_dir}/{category_name}_epoch_{epoch + 1:03d}_.png',
+                           f'{_train_result_dir}/{_category_name}_epoch_{epoch + 1:03d}_.png',
                            nrow=8, normalize=True)
 
         # Calculate timing
         t2 = time.time()
         epoch_time = t2 - t1
-        remaining_time = (epochs - epoch - 1) * epoch_time
+        remaining_time = (_epochs - epoch - 1) * epoch_time
 
         # Update main progress bar
         postfix_dict = {'Train': f'{epoch_loss:.4f}',
@@ -293,29 +290,29 @@ def main(resume_from_checkpoint=None):
     print(f"Best loss: {best_loss:.4f}")
 
     # save final checkpoint
-    final_checkpoint_path = save_checkpoint(model, optimizer, scheduler, final_epoch - 1, loss_epoch, best_loss,
-                                            category_name, pretrained_save_dir, "final")
+    save_checkpoint(model, optimizer, scheduler, final_epoch - 1, loss_epoch, best_loss,
+                                            _category_name, _pretrained_save_dir, "final")
 
-    summary_path = f'{pretrained_save_dir}/{category_name}_training_summary.txt'
+    summary_path = f'{_pretrained_save_dir}/{_category_name}_training_summary.txt'
     with open(summary_path, 'w') as f:
-        f.write(f"Training Summary for {category_name}\n")
+        f.write(f"Training Summary for {_category_name}\n")
         f.write("=" * 50 + "\n")
         f.write(f"Total epochs trained: {final_epoch}\n")
         f.write(f"Best loss achieved: {best_loss:.6f}\n")
         f.write(f"Final loss: {loss_epoch[-1]:.6f}\n")
-        f.write(f"Early stopping triggered: {'Yes' if final_epoch < epochs else 'No'}\n")
+        f.write(f"Early stopping triggered: {'Yes' if final_epoch < _epochs else 'No'}\n")
         f.write(f"Available checkpoints:\n")
-        f.write(f"  - Best model: {category_name}_vae_best.pth\n")
-        f.write(f"  - Latest model: {category_name}_vae_latest.pth\n")
-        f.write(f"  - Final model: {category_name}_vae_final.pth\n")
-        if final_epoch < epochs:
-            f.write(f"  - Early stop model: {category_name}_vae_early_stop_epoch_{final_epoch - 1}.pth\n")
+        f.write(f"  - Best model: {_category_name}_vae_best.pth\n")
+        f.write(f"  - Latest model: {_category_name}_vae_latest.pth\n")
+        f.write(f"  - Final model: {_category_name}_vae_final.pth\n")
+        if final_epoch < _epochs:
+            f.write(f"  - Early stop model: {_category_name}_vae_early_stop_epoch_{final_epoch - 1}.pth\n")
 
     return loss_epoch
 
 
 if __name__ == '__main__':
     set_seed(_seed)
-    resume_checkpoint = resume_checkpoint_path
+    resume_checkpoint = _resume_checkpoint_path
     loss_epoch = main(resume_from_checkpoint=resume_checkpoint)
     print(f"Training completed!")
