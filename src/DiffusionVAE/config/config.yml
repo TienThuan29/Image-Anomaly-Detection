@@ -1,0 +1,99 @@
+data:
+  name: mvtec # mvtect, mvtect_loco
+  mvtec_data_dir: ../../datasets/mvtec_anomaly_detection
+  mask: True
+  # mvtec: ['carpet', 'bottle', 'hazelnut', 'leather', 'cable', 'capsule', 'grid', 'pill', 'transistor', 'metal_nut', 'screw','toothbrush', 'zipper', 'tile', 'wood']
+
+training:
+  # Training mode: True-True is continuous training phase 1 to phase 2 (no stop)
+  is_vae_training: True
+  is_diffu_training: True
+  category: toothbrush
+
+general:
+  seed: 42
+  batch_size: 8
+  image_size: 256
+  cuda: 0
+
+vae_model:
+  name: vae_resnet # vae_resnet, vae_unet
+  backbone: resnet18 # resnet18, resnet34, resnet50
+  lr: 3e-4  # 1e-4
+  epochs: 5000
+  weight_decay: 1e-5
+  z_dim: 256
+  dropout_p: 0.1
+  save_freq: 30
+  sample_freq: 30
+  in_channels: 3
+  out_channels: 3
+  optimizer_name: AdamW # Adam, SGD, AdamW
+  train_result_base_dir: ../../mvtec_phase1_vae/train_results/
+  pretrained_save_base_dir: ../../mvtec_phase1_vae/vae_pretrained/
+  resume_checkpoint:
+  early_stopping:
+    is_early_stopping: True
+    patience: 50
+    min_delta: 0.01
+    smoothing_window: 5
+
+
+diffusion_model:
+  # Unet settings
+  unet:
+    in_channel: 6
+    out_channel: 3
+    inner_channel: 64
+    channel_mults:
+      - 1
+      - 2
+      - 4
+      - 8
+      - 8
+      - 8
+    attn_res:
+      - 16
+#      - 8
+    res_blocks: 2
+    dropout: 0.1
+    norm_groups: 1
+  # diffusion setting
+  beta_schedule:
+    train:
+      schedule: linear
+      n_timestep: 2000
+      linear_start: 0.000001
+      linear_end: 0.01
+    val:
+      schedule: linear
+      n_timestep: 200
+      linear_start: 0.000001
+      linear_end: 0.1
+  diffusion:
+    image_size: 256
+    channels: 3
+    conditional: true
+  # # # #
+  lr: 1e-4
+  epochs: 1000
+  dropout_p: 0.1
+  weight_decay: 1e-5
+  optimizer_name: AdamW # Adam, SGD, AdamW
+  train_result_base_dir: ./src/DiffusionVAE/mvtec_phase2_diffusion/train_results/
+  pretrained_save_base_dir: ./src/DiffusionVAE/mvtec_phase2_diffusion/diffu_pretrained/
+  phase1_vae_pretrained_path:
+  eval_interval: 10
+
+
+testing:
+  category: bottle
+  # Image score type name
+  image_score_type_name: std # max, mean, std
+  vae_model_path:
+  diffusion_model_path:
+  diffusion_test_result_base_dir: ./mvtec_phase2_diffusion/diffusion_testing/
+  # Visualization settings
+  save_visualizations: True
+  max_visualization_batches: 5
+  max_images_per_batch: 8
