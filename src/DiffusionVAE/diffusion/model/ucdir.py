@@ -80,7 +80,7 @@ class ResnetBlocWithAttn(nn.Module):
         return x
 
 
-""" Conditional Intergration Module in pipleline """
+""" Conditional Intergration Module in pipeline """
 class ResnetBlockDY3h(nn.Module):
     def __init__(
             self, dim, dim_out, nl_emb_dim=None,
@@ -216,7 +216,7 @@ class DY3h(nn.Module):
             for _ in range(0, res_blocks):
                 downs.append(
                     ResnetBlocWithAttn(pre_channel, channel_mult, nl_emb_dim=noise_level_channel,
-                                       norm_groups=norm_groups, dropout=dropout_p, with_attn=use_attn,
+                                       norm_groups=norm_groups, dropout_p=dropout_p, with_attn=use_attn,
                                        resname=resname)
                 )
                 feat_channels.append(channel_mult)
@@ -231,9 +231,9 @@ class DY3h(nn.Module):
         """ Mid unet """
         self.mid = nn.ModuleList([
             ResnetBlocWithAttn(pre_channel, pre_channel, nl_emb_dim=noise_level_channel, norm_groups=norm_groups,
-                               dropout=dropout_p, with_attn=True, resname=resname),
+                               dropout_p=dropout_p, with_attn=True, resname=resname),
             ResnetBlocWithAttn(pre_channel, pre_channel, nl_emb_dim=noise_level_channel, norm_groups=norm_groups,
-                               dropout=dropout_p, with_attn=False, resname=resname)
+                               dropout_p=dropout_p, with_attn=False, resname=resname)
         ])
 
 
@@ -247,7 +247,7 @@ class DY3h(nn.Module):
                 ups.append(
                     ResnetBlocWithAttn(
                         pre_channel + feat_channels.pop(), channel_mult, nl_emb_dim=noise_level_channel,
-                        norm_groups=norm_groups, dropout=dropout_p, with_attn=use_attn, resname=resname
+                        norm_groups=norm_groups, dropout_p=dropout_p, with_attn=use_attn, resname=resname
                     )
                 )
                 pre_channel = channel_mult
@@ -270,8 +270,8 @@ class DY3h(nn.Module):
         )
 
 
-    """ 'native_forward' là một flow chạy hoàn chỉnh của unet, Down -> Mid ->  Up"""
-    def naive_forward(self, x, time, guide):
+    """ 'naiveforward' là một flow chạy hoàn chỉnh của unet, Down -> Mid ->  Up"""
+    def naiveforward(self, x, time, guide):
         # Tạo embedding thơi gian
         # time (integer) -> Positional Encoding -> MLP
         t = self.noise_level_mlp(time) if exists(self.noise_level_mlp) else None

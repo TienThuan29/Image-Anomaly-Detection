@@ -18,7 +18,7 @@ config = load_config()
 _phase = config.diffusion_model.phase
 _finetune_norm = False
 _optimizer_name = config.diffusion_model.optimizer_name
-_lr = config.diffusion_model.lr
+_lr = float(config.diffusion_model.lr)
 _resume_checkpoint_path = config.diffusion_model.resume_checkpoint
 
 # train result dir
@@ -26,6 +26,7 @@ _train_result_dir = config.diffusion_model.train_result_base_dir
 _pretrained_save_dir = config.diffusion_model.pretrained_save_base_dir
 
 # ema scheduler
+_ema_scheduler = config.diffusion_model.ema_scheduler
 _use_ema_scheduler = config.diffusion_model.ema_scheduler.use
 _ema_decay = config.diffusion_model.ema_scheduler.ema_decay
 _step_start_ema = config.diffusion_model.ema_scheduler.step_start_ema
@@ -88,6 +89,12 @@ class DDPM(BaseModel):
         self.data = None
 
         if _use_ema_scheduler:
+            #   ema_scheduler:
+            #     use: true
+            #     step_start_ema: 5000
+            #     update_ema_every: 1
+            #     ema_decay: 0.9999
+            self.ema_scheduler = _ema_scheduler
             # Dùng deepcopy để tạo một mô hình mới với weights y hệt ban đầu, độc lập với netG.
             self.netG_EMA = copy.deepcopy(temp_model)
             self.netG_EMA = self.netG_EMA.to(self.device)
@@ -96,11 +103,12 @@ class DDPM(BaseModel):
             self.ema_scheduler = None
 
         self.set_loss()
+        # print("_train_beta_schedule", _train_beta_schedule)
         self.set_new_noise_schedule(
-            _train_beta_schedule.schedule,
-            _train_beta_schedule.n_timestep,
-            _train_beta_schedule.linear_start,
-            _train_beta_schedule.linear_end,
+            _train_beta_schedule['schedule'],
+            _train_beta_schedule['n_timestep'],
+            _train_beta_schedule['linear_start'],
+            _train_beta_schedule['linear_end'],
             schedule_phase='train'
         )
 
@@ -127,7 +135,7 @@ class DDPM(BaseModel):
         self.print_network()
         self.iter = 0
 
-        self.clip_norm = self.opt.get('clip_norm', None)
+        self.clip_norm = None # self.opt.get('clip_norm', None)
         logger.info('* clip norm %s' % self.clip_norm)
 
 
@@ -153,9 +161,9 @@ class DDPM(BaseModel):
 
         # set log
         self.log_dict['l_pix'] = l_pix.item()
-
+        # print('self.ema_scheduler', self.ema_scheduler)
         if self.ema_scheduler is not None:
-            if self.iter > _use_ema_scheduler and self.iter % _update_ema_every == 0:
+            if self.iter > self.ema_scheduler.step_start_ema and self.iter % self.ema_scheduler.update_ema_every == 0:
                 self.EMA.update_model_average(self.netG_EMA, self.netG)
         self.iter += 1
 

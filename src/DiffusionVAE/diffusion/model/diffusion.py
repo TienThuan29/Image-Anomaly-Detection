@@ -4,7 +4,7 @@ from functools import partial
 from inspect import isfunction
 import numpy as np
 from tqdm import tqdm
-from beta_schedule import make_beta_schedule
+from diffusion.model.beta_schedule import make_beta_schedule
 from diffusion.model.ucdir import UNetSeeInDark
 
 

@@ -6,13 +6,13 @@ data:
 
 training:
   # Training mode: True-True is continuous training phase 1 to phase 2 (no stop)
-  is_vae_training: True
+  is_vae_training: False
   is_diffu_training: True
-  category: toothbrush
+  category: cable
 
 general:
   seed: 42
-  batch_size: 8
+  batch_size: 1
   image_size: 256
   cuda: 0
 
@@ -74,16 +74,16 @@ diffusion_model:
   diffusion:
     image_size: 256
     channels: 3
-    conditional: true
+    conditional: True
   # # # #
   lr: 1e-4
+  loss_type: l2 # l1, l2
   epochs: 1000
-  dropout_p: 0.1
   weight_decay: 1e-5
   optimizer_name: AdamW # Adam, SGD, AdamW
   train_result_base_dir: ./src/DiffusionVAE/mvtec_phase2_diffusion/train_results/
   pretrained_save_base_dir: ./src/DiffusionVAE/mvtec_phase2_diffusion/diffu_pretrained/
-  phase1_vae_pretrained_path:
+  vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
   eval_interval: 10
   ema_scheduler:
     use: true
