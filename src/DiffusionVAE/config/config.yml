@@ -40,6 +40,7 @@ vae_model:
 
 
 diffusion_model:
+  phase: train
   # Unet settings
   unet:
     in_channel: 6
@@ -84,7 +85,12 @@ diffusion_model:
   pretrained_save_base_dir: ./src/DiffusionVAE/mvtec_phase2_diffusion/diffu_pretrained/
   phase1_vae_pretrained_path:
   eval_interval: 10
-
+  ema_scheduler:
+    use: true
+    step_start_ema: 5000
+    update_ema_every: 1
+    ema_decay: 0.9999
+  resume_checkpoint:
 
 testing:
   category: bottle
