@@ -52,10 +52,8 @@ diffusion_model:
       - 4
       - 8
       - 8
-      - 8
     attn_res:
       - 16
-#      - 8
     res_blocks: 2
     dropout: 0.1
     norm_groups: 1
@@ -78,27 +76,30 @@ diffusion_model:
   # # # #
   lr: 1e-4
   loss_type: l2 # l1, l2
-  epochs: 1000
+  epochs: 500
   weight_decay: 1e-5
   optimizer_name: AdamW # Adam, SGD, AdamW
-  train_result_base_dir: ./src/DiffusionVAE/mvtec_phase2_diffusion/train_results/
-  pretrained_save_base_dir: ./src/DiffusionVAE/mvtec_phase2_diffusion/diffu_pretrained/
+  train_result_base_dir: ../../mvtec_phase2_diffusion/train_results/
+  pretrained_save_base_dir: ../../mvtec_phase2_diffusion/diffu_pretrained/
   vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
   eval_interval: 10
   ema_scheduler:
-    use: true
+    use: False
     step_start_ema: 5000
     update_ema_every: 1
     ema_decay: 0.9999
   resume_checkpoint:
 
 testing:
+  is_testing: False
   category: bottle
   # Image score type name
   image_score_type_name: std # max, mean, std
+  # Model path
   vae_model_path:
   diffusion_model_path:
-  diffusion_test_result_base_dir: ./mvtec_phase2_diffusion/diffusion_testing/
+  # Save dir
+  test_result_base_dir: ../../mvtec_testing/
   # Visualization settings
   save_visualizations: True
   max_visualization_batches: 5

@@ -13,6 +13,10 @@ _is_diffu_training = config.training.is_diffu_training
 _training_category = config.training.category
 _seed = config.general.seed
 
+# Testing
+_is_testing = config.testing.is_testing
+
+
 def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -31,3 +35,6 @@ if __name__ == "__main__":
     if _is_diffu_training:
         print('training diffusion...')
         train_diffusion()
+
+    if _is_testing:
+        print('testing DiffusionVAE...')

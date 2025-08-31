@@ -15,6 +15,7 @@ logger = logging.getLogger('base')
 config = load_config()
 
 # training
+_category = config.training.category
 _phase = config.diffusion_model.phase
 _finetune_norm = False
 _optimizer_name = config.diffusion_model.optimizer_name
@@ -22,8 +23,8 @@ _lr = float(config.diffusion_model.lr)
 _resume_checkpoint_path = config.diffusion_model.resume_checkpoint
 
 # train result dir
-_train_result_dir = config.diffusion_model.train_result_base_dir
-_pretrained_save_dir = config.diffusion_model.pretrained_save_base_dir
+_train_result_dir = config.diffusion_model.train_result_base_dir + _category + '/'
+_pretrained_save_dir = config.diffusion_model.pretrained_save_base_dir + _category + '/'
 
 # ema scheduler
 _ema_scheduler = config.diffusion_model.ema_scheduler
@@ -35,6 +36,7 @@ _update_ema_every = config.diffusion_model.ema_scheduler.update_ema_every
 # beta schedule
 _train_beta_schedule = config.diffusion_model.beta_schedule.train
 
+""" Ema gpu """
 class EMA():
     # beta = hệ số giảm (decay)
     # Giá trị càng gần 1 → EMA thay đổi càng chậm (mượt hơn).
@@ -51,6 +53,7 @@ class EMA():
         if old is None:
             return new
         return old * self.beta + (1 - self.beta) * new
+
 
 class DDPM(BaseModel):
     def __init__(
@@ -97,7 +100,9 @@ class DDPM(BaseModel):
             self.ema_scheduler = _ema_scheduler
             # Dùng deepcopy để tạo một mô hình mới với weights y hệt ban đầu, độc lập với netG.
             self.netG_EMA = copy.deepcopy(temp_model)
+            # !!! Ema giữ một bản sao của model, làm tăng mức sử dụng vram khi được chuyển vào gpu
             self.netG_EMA = self.netG_EMA.to(self.device)
+            # Khắc phục: chuyển vào cpu
             self.EMA = EMA(beta=_ema_decay)
         else:
             self.ema_scheduler = None
@@ -141,6 +146,13 @@ class DDPM(BaseModel):
 
     def feed_data(self, data):
         self.data = self.set_device(data)
+
+    def _init_ema_from(self, model: nn.Module) -> nn.Module:
+        ema = copy.deepcopy(model).eval()
+        for p in ema.parameters():
+            p.requires_grad_(False)
+        ema.to('cpu')  # EMA trên CPU
+        return ema
 
     """ Train  """
     def optimize_parameters(self):

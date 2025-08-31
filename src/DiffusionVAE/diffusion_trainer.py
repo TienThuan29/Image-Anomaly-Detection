@@ -99,9 +99,7 @@ def train_diffusion():
         for batch_idx, batch in enumerate(batch_bar):
             images = batch['image'].to(device)
 
-            # Get reconstruct image from vae model phase 1
             with torch.no_grad():
-                # origin image forward to vae ( data['SR'] )
                 vae_reconstructed, _, _ = vae_model(images)
 
             diffusion_model.feed_data({
@@ -153,18 +151,18 @@ def train_diffusion():
         
         with open(log_file, 'w') as f:
             json.dump(logs, f, indent=2)
-        
+
+        # Save best model if current loss is better
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            best_epoch = epoch + 1
+            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best")
+            print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
+
         # Save checkpoint every eval_interval epochs
-        if (epoch + 1) % _eval_interval == 0:
-            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest")
-            
-            # Save best model if current loss is better
-            if epoch_loss < best_loss:
-                best_loss = epoch_loss
-                best_epoch = epoch + 1
-                diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best")
-                print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
-        
+        # if (epoch + 1) % _eval_interval == 0:
+        #     diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest")
+
         # Save final model at the end
         if epoch == total_epochs - 1:
             diffusion_model.save_network(epoch + 1, diffusion_model.iter, "final")
