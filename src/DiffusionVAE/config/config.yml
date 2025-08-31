@@ -92,7 +92,7 @@ diffusion_model:
 
 testing:
   is_testing: False
-  category: bottle
+  category: cable
   # Image score type name
   image_score_type_name: std # max, mean, std
   # Model path

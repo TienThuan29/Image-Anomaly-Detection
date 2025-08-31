@@ -8,6 +8,7 @@ import numpy as np
 from config import load_config
 from tqdm import tqdm
 from data.dataloader import load_mvtec_train_dataset
+from testing.inference import run_inference_during_training
 
 config = load_config()
 
@@ -41,6 +42,20 @@ _eval_interval = config.diffusion_model.eval_interval
 _train_result_dir = config.diffusion_model.train_result_base_dir + _category_name + "/"
 _log_result_dir = config.diffusion_model.train_result_base_dir + _category_name + "/" + "log_results/"
 _pretrained_save_dir = config.diffusion_model.pretrained_save_base_dir + _category_name + "/"
+
+def save_evaluation_log(epoch, image_auroc, pixel_auroc, log_dir):
+    """Save evaluation results to a .txt log file."""
+    log_file = os.path.join(log_dir, 'evaluation_log.txt')
+    
+    # Create log entry
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] Epoch {epoch}: Image AUROC: {image_auroc:.4f}, Pixel AUROC: {pixel_auroc:.4f}\n"
+    
+    # Append to log file
+    with open(log_file, 'a') as f:
+        f.write(log_entry)
+    
+    print(f"Evaluation at epoch {epoch}: Image AUROC: {image_auroc:.4f}, Pixel AUROC: {pixel_auroc:.4f}")
 
 def train_diffusion():
     device = torch.device("cuda" if _cuda else "cpu")
@@ -86,6 +101,7 @@ def train_diffusion():
     diffusion_model = diffusion.model.create_model()
 
     print(f"Starting training for {total_epochs} epochs...")
+    print(f"Evaluation interval: {_eval_interval} epochs")
     epoch_bar = tqdm(range(start_epoch, total_epochs), desc="Training Progress", position=0, leave=True)
     
     for epoch in epoch_bar:
@@ -159,9 +175,31 @@ def train_diffusion():
             diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best")
             print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
 
-        # Save checkpoint every eval_interval epochs
-        # if (epoch + 1) % _eval_interval == 0:
-        #     diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest")
+        # Run evaluation every eval_interval epochs
+        if (epoch + 1) % _eval_interval == 0:
+            print(f"\nRunning evaluation at epoch {epoch + 1}...")
+            diffusion_model.netG.eval()
+            
+            # Run inference during training
+            image_auroc, pixel_auroc = run_inference_during_training(vae_model, diffusion_model, _train_result_dir)
+            
+            # Save evaluation log
+            save_evaluation_log(epoch + 1, image_auroc, pixel_auroc, _log_result_dir)
+            
+            # Store evaluation history
+            eval_history['epochs'].append(epoch + 1)
+            eval_history['img_auroc'].append(image_auroc)
+            eval_history['px_auroc'].append(pixel_auroc)
+            
+            # Save evaluation history
+            eval_history_file = os.path.join(_log_result_dir, 'evaluation_history.json')
+            with open(eval_history_file, 'w') as f:
+                json.dump(eval_history, f, indent=2)
+            
+            diffusion_model.netG.train()
+            
+            # Save checkpoint every eval_interval epochs
+            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest")
 
         # Save final model at the end
         if epoch == total_epochs - 1:
@@ -175,6 +213,7 @@ def train_diffusion():
         'best_loss': best_loss,
         'final_loss': loss_history[-1] if loss_history else None,
         'loss_history': loss_history,
+        'evaluation_history': eval_history,
         'training_completed': True,
         'timestamp': time.time()
     }
@@ -188,5 +227,6 @@ def train_diffusion():
     print(f"Final loss: {loss_history[-1]:.6f}")
     print(f"Results saved to: {_train_result_dir}")
     print(f"Model checkpoints saved to: {_pretrained_save_dir}")
+    print(f"Evaluation logs saved to: {_log_result_dir}")
 
 
