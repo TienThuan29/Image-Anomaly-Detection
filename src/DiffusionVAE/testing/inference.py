@@ -239,84 +239,95 @@ if __name__ == "__main__":
 def run_inference_during_training(vae_model, diffusion_model, result_dir=None):
     """Run inference during training with optional custom result directory."""
     
-    # Use provided result_dir or default to testing result dir
-    save_dir = result_dir if result_dir is not None else _testing_result_dir
-    os.makedirs(save_dir, exist_ok=True)
+    try:
+        # Define device
+        device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
+        
+        # Use provided result_dir or default to testing result dir
+        save_dir = result_dir if result_dir is not None else _testing_result_dir
+        os.makedirs(save_dir, exist_ok=True)
 
-    test_loader = load_mvtec_test_dataset(
-        dataset_root_dir=config.data.mvtec_data_dir,
-        category=_testing_category,
-        image_size=config.general.image_size,
-        batch_size=config.general.batch_size
-    )
-    print(f"Testing on {_testing_category} category with {len(test_loader)} batches")
+        test_loader = load_mvtec_test_dataset(
+            dataset_root_dir=config.data.mvtec_data_dir,
+            category=_testing_category,
+            image_size=config.general.image_size,
+            batch_size=config.general.batch_size
+        )
+        print(f"Testing on {_testing_category} category with {len(test_loader)} batches")
 
-    all_labels = []
-    all_image_scores = []
-    all_anomaly_maps = []
-    all_gt_masks = []
+        all_labels = []
+        all_image_scores = []
+        all_anomaly_maps = []
+        all_gt_masks = []
 
-    with torch.no_grad():
-        for batch_idx, (images, masks, labels) in enumerate(tqdm(test_loader, desc="Running inference")):
+        with torch.no_grad():
+            for batch_idx, (images, masks, labels) in enumerate(tqdm(test_loader, desc="Running inference")):
 
-            images = images.to(_device)  # [B, C, H, W]
-            masks = masks.to(_device)  # [B, 1, H, W]
-            labels = labels.to(_device)  # [B]
+                images = images.to(device)  # [B, C, H, W]
+                masks = masks.to(device)  # [B, 1, H, W]
+                labels = labels.to(device)  # [B]
 
-            vae_reconstructions = vae_model.reconstruct(images)  # [B, C, H, W]
+                vae_reconstructions = vae_model.reconstruct(images)  # [B, C, H, W]
 
-            # Diffusion Restoration using VAE reconstructions as input
-            if config.diffusion_model.diffusion.conditional:
-                diffusion_reconstructions = diffusion_model.netG.super_resolution(
-                    vae_reconstructions,
-                    continous=False
-                )  # [B, C, H, W]
-            else:
-                # For non-conditional, use regular sample method
-                diffusion_reconstructions = diffusion_model.netG.sample(
-                    batch_size=images.size(0),
-                    continous=False
-                )  # [B, C, H, W]
+                # Diffusion Restoration using VAE reconstructions as input
+                if config.diffusion_model.diffusion.conditional:
+                    diffusion_reconstructions = diffusion_model.netG.super_resolution(
+                        vae_reconstructions,
+                        continous=False
+                    )  # [B, C, H, W]
+                else:
+                    # For non-conditional, use regular sample method
+                    diffusion_reconstructions = diffusion_model.netG.sample(
+                        batch_size=images.size(0),
+                        continous=False
+                    )  # [B, C, H, W]
 
-            # Calculate anomaly maps (difference between original and diffusion output)
-            anomaly_maps = compute_anomaly_map(images, diffusion_reconstructions)  # [B, H, W]
+                # Calculate anomaly maps (difference between original and diffusion output)
+                anomaly_maps = compute_anomaly_map(images, diffusion_reconstructions)  # [B, H, W]
 
-            # Calculate image-level scores
-            image_scores = calc_image_score(anomaly_maps, _image_score_type_name)  # [B]
+                # Calculate image-level scores
+                image_scores = calc_image_score(anomaly_maps, _image_score_type_name)  # [B]
 
-            # Store results
-            all_labels.extend(labels.cpu().numpy().tolist())
-            all_image_scores.extend(image_scores.cpu().numpy().tolist())
-            all_anomaly_maps.extend([am.cpu() for am in anomaly_maps])
-            all_gt_masks.extend([mask.squeeze(0).cpu() for mask in masks])  # Remove channel dimension
+                # Store results
+                all_labels.extend(labels.cpu().numpy().tolist())
+                all_image_scores.extend(image_scores.cpu().numpy().tolist())
+                all_anomaly_maps.extend([am.cpu() for am in anomaly_maps])
+                all_gt_masks.extend([mask.squeeze(0).cpu() for mask in masks])  # Remove channel dimension
 
-    # Calculate metrics
-    image_auroc = eval_auroc_image(all_labels, all_image_scores)
-    pixel_auroc = eval_auroc_pixel(all_anomaly_maps, all_gt_masks)
+        # Calculate metrics
+        image_auroc = eval_auroc_image(all_labels, all_image_scores)
+        pixel_auroc = eval_auroc_pixel(all_anomaly_maps, all_gt_masks)
 
-    # Save evaluation results
-    evaluation_results = {
-        'category': _testing_category,
-        'image_auroc': image_auroc,
-        'pixel_auroc': pixel_auroc,
-        'image_score_type': _image_score_type_name,
-        'total_samples': len(all_labels),
-        'anomaly_samples': sum(all_labels),
-        'normal_samples': len(all_labels) - sum(all_labels)
-    }
+        # Save evaluation results
+        evaluation_results = {
+            'category': _testing_category,
+            'image_auroc': image_auroc,
+            'pixel_auroc': pixel_auroc,
+            'image_score_type': _image_score_type_name,
+            'total_samples': len(all_labels),
+            'anomaly_samples': sum(all_labels),
+            'normal_samples': len(all_labels) - sum(all_labels)
+        }
 
-    results_path = os.path.join(save_dir, 'evaluation_results.json')
-    with open(results_path, 'w') as f:
-        json.dump(evaluation_results, f, indent=2)
+        results_path = os.path.join(save_dir, 'evaluation_results.json')
+        with open(results_path, 'w') as f:
+            json.dump(evaluation_results, f, indent=2)
 
-    print(f"Evaluation Results:")
-    print(f"  Category: {_testing_category}")
-    print(f"  Image AUROC: {image_auroc:.4f}")
-    print(f"  Pixel AUROC: {pixel_auroc:.4f}")
-    print(f"  Total samples: {len(all_labels)}")
-    print(f"  Anomaly samples: {sum(all_labels)}")
-    print(f"  Normal samples: {len(all_labels) - sum(all_labels)}")
-    print(f"Results saved to: {results_path}")
+        print(f"Evaluation Results:")
+        print(f"  Category: {_testing_category}")
+        print(f"  Image AUROC: {image_auroc:.4f}")
+        print(f"  Pixel AUROC: {pixel_auroc:.4f}")
+        print(f"  Total samples: {len(all_labels)}")
+        print(f"  Anomaly samples: {sum(all_labels)}")
+        print(f"  Normal samples: {len(all_labels) - sum(all_labels)}")
+        print(f"Results saved to: {results_path}")
     
-    return image_auroc, pixel_auroc
+        return image_auroc, pixel_auroc
+    
+    except Exception as e:
+        print(f"Error during inference: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return default values in case of error
+        return 0.0, 0.0
 
