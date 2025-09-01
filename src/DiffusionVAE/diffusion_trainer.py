@@ -99,6 +99,7 @@ def train_diffusion():
     best_epoch = 0
 
     diffusion_model = diffusion.model.create_model()
+    diffusion_model.set_noise_schedule_for_training()
 
     print(f"Starting training for {total_epochs} epochs...")
     print(f"Evaluation interval: {_eval_interval} epochs")
@@ -179,7 +180,8 @@ def train_diffusion():
         if (epoch + 1) % _eval_interval == 0:
             print(f"\nRunning evaluation at epoch {epoch + 1}...")
             diffusion_model.netG.eval()
-            
+            # đặt noise schedule về num_step 200 cho testing
+            diffusion_model.set_noise_schedule_for_val()
             # Run inference during training
             image_auroc, pixel_auroc = run_inference_during_training(vae_model, diffusion_model, _train_result_dir)
             
@@ -197,8 +199,9 @@ def train_diffusion():
                 json.dump(eval_history, f, indent=2)
             
             diffusion_model.netG.train()
-            
-            # Save checkpoint every eval_interval epochs
+            # trả noise schedule về trạng thái training
+            diffusion_model.set_noise_schedule_for_training()
+            # Save checkpoint
             diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest")
 
         # Save final model at the end

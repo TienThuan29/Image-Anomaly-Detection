@@ -61,7 +61,7 @@ diffusion_model:
   beta_schedule:
     train:
       schedule: linear
-      n_timestep: 2000
+      n_timestep: 1000
       linear_start: 0.000001
       linear_end: 0.01
     val:

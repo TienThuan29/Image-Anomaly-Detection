@@ -33,8 +33,10 @@ _ema_decay = config.diffusion_model.ema_scheduler.ema_decay
 _step_start_ema = config.diffusion_model.ema_scheduler.step_start_ema
 _update_ema_every = config.diffusion_model.ema_scheduler.update_ema_every
 
-# beta schedule
+# beta schedule for training
 _train_beta_schedule = config.diffusion_model.beta_schedule.train
+# beta schedule for testing/val
+_test_beta_schedule = config.diffusion_model.beta_schedule.val
 
 """ Ema gpu """
 class EMA():
@@ -230,6 +232,26 @@ class DDPM(BaseModel):
                 self.netG.set_new_noise_schedule(
                     schedule, n_timestep, linear_start, linear_end, self.device
                 )
+
+
+    def set_noise_schedule_for_training(self):
+        self.set_new_noise_schedule(
+            _train_beta_schedule['schedule'],
+            _train_beta_schedule['n_timestep'],
+            _train_beta_schedule['linear_start'],
+            _train_beta_schedule['linear_end'],
+            schedule_phase='train'
+        )
+
+
+    def set_noise_schedule_for_val(self,):
+        self.set_new_noise_schedule(
+            _test_beta_schedule['schedule'],
+            _test_beta_schedule['n_timestep'],
+            _test_beta_schedule['linear_start'],
+            _test_beta_schedule['linear_end'],
+            schedule_phase='val'
+        )
 
 
     def save_network(self, epoch, iter_step, checkpoint_type="latest"):
