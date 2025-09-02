@@ -9,14 +9,14 @@ from diffusion.util import patch_forward_guide
 class PositionalEncoding(nn.Module):
     def __init__(self, dim):
         super().__init__()
-        self.dim = dim
+        self.dim = dim # dim = inner_channel (trong config = 64)
 
     def forward(self, noise_level):
         count = self.dim // 2
         step = torch.arange(count, dtype=noise_level.dtype, device=noise_level.device) / count
         encoding = noise_level.unsqueeze(1) * torch.exp(-math.log(1e4) * step.unsqueeze(0))
         encoding = torch.cat([torch.sin(encoding), torch.cos(encoding)], dim=-1)
-        return encoding
+        return encoding # [B, 64]
 
 
 """ Swish activation function """
@@ -88,7 +88,12 @@ class ResnetBlockDY3h(nn.Module):
             nset=8 # N trong paper chính là nset trong code.
     ):
         super().__init__()
-        self.noise_func = nn.Sequential(nn.Linear(nl_emb_dim, nset), Swish(), nn.Linear(nset, nset), )
+        self.noise_func = nn.Sequential(
+            nn.Linear(nl_emb_dim, nset), # Input: [B, 64] -> Output: [B, nset] (nset = 8)
+            Swish(),
+            nn.Linear(nset, nset)
+        ) # output: [B, snet]
+
         self.nset = nset
         self.dim_out = dim_out
 
@@ -169,7 +174,7 @@ def default(val, d):
     return d() if isfunction(d) else d
 
 
-""" Main diffusion network - learn residual """
+""" Main diffusion network - learn residual (denoise_fn)"""
 class DY3h(nn.Module):
     def __init__(
             self,
@@ -272,6 +277,12 @@ class DY3h(nn.Module):
 
     """ 'naiveforward' là một flow chạy hoàn chỉnh của unet, Down -> Mid ->  Up"""
     def naiveforward(self, x, time, guide):
+        """
+            x : torch.cat([x_in['SR'], x_noisy], dim=1)
+            time : continuous_sqrt_alpha_cumprod
+            guide : ({'guide': x_init}) là x_init là ảnh dự đoán ban đầu qua cục unet_1
+        """
+
         # Tạo embedding thơi gian
         # time (integer) -> Positional Encoding -> MLP
         t = self.noise_level_mlp(time) if exists(self.noise_level_mlp) else None

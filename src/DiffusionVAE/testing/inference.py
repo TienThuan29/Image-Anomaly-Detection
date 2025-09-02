@@ -20,13 +20,14 @@ from testing.metric import (
     eval_auroc_pixel,
     compute_anomaly_map
 )
-from vae.vae_resnet import VAEResNet
+from vae.utils import load_vae
 
 config = load_config()
 
 _seed = config.general.seed
 _image_score_type_name = config.testing.image_score_type_name
 _testing_category = config.testing.category
+_image_size = config.general.image_size
 # Model path
 _vae_model_path = config.testing.vae_model_path
 _diffusion_model_path = config.testing.diffusion_model_path
@@ -36,6 +37,14 @@ _testing_result_dir = config.testing.test_result_base_dir + _testing_category + 
 _save_visualizations = config.testing.save_visualizations
 _max_visualization_batches = config.testing.max_visualization_batches
 _max_images_per_batch = config.testing.max_images_per_batch
+
+# vae
+_vae_name = config.vae_model.name
+_backbone = config.vae_model.backbone
+_input_channels = config.vae_model.in_channels
+_output_channels = config.vae_model.out_channels
+_z_dim = config.vae_model.z_dim
+_dropout_p = config.vae_model.dropout_p
 
 # Device
 _device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
@@ -62,43 +71,31 @@ def load_diffusion_model():
 
     val_schedule = config.diffusion_model.beta_schedule.val
     diffusion_model.set_new_noise_schedule(
-        schedule=val_schedule.schedule,
-        n_timestep=val_schedule.n_timestep,
-        linear_start=val_schedule.linear_start,
-        linear_end=val_schedule.linear_end,
+        schedule=val_schedule['schedule'],
+        n_timestep=val_schedule['n_timestep'],
+        linear_start=val_schedule['linear_start'],
+        linear_end=val_schedule['linear_end'],
         schedule_phase='val'
     )
     
     print("Diffusion model loaded success")
     return diffusion_model
 
-def load_vae_model():
-    """Load VAE model from checkpoint"""
-    print(f"Loading VAE model from: {_vae_model_path}")
-    
-    # Initialize VAE model
-    vae_model = VAEResNet(
-        image_size=config.general.image_size,
-        in_channels=config.vae_model.in_channels,
-        latent_dim=config.vae_model.z_dim,
-        out_channels=config.vae_model.out_channels,
-        resnet_name=config.vae_model.backbone,
-        dropout_p=config.vae_model.dropout_p
-    )
-    
-    # Load checkpoint
-    checkpoint = torch.load(_vae_model_path, map_location=_device)
-    vae_model.load_state_dict(checkpoint['model_state_dict'])
-    vae_model.to(_device)
-    vae_model.eval()
-    
-    print("VAE model loaded successfully")
-    return vae_model
-
 def run_inference():
+    set_seed(_seed)
     os.makedirs(_testing_result_dir, exist_ok=True)
 
-    vae_model = load_vae_model()
+    vae_model = load_vae(
+        checkpoint_path=_vae_model_path,
+        vae_name=_vae_name,
+        input_channels=_input_channels,
+        output_channels=_output_channels,
+        z_dim=_z_dim,
+        backbone=_backbone,
+        dropout_p=_dropout_p,
+        image_size=_image_size,
+        device=_device
+    )
     diffusion_model = load_diffusion_model()
     diffusion_model.set_noise_schedule_for_val()
 
@@ -251,16 +248,11 @@ def run_inference():
         print(f"Visualizations saved to: {vis_dir}")
 
 def set_seed(seed):
-    """Set random seed for reproducibility."""
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
     os.environ['PYTHONHASHSEED'] = str(seed)
-
-if __name__ == "__main__":
-    set_seed(_seed)
-    run_inference()
 
 
 @torch.no_grad()

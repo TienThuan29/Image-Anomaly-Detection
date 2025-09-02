@@ -12,7 +12,7 @@ training:
 
 general:
   seed: 42
-  batch_size: 1
+  batch_size: 4
   image_size: 256
   cuda: 0
 
@@ -94,13 +94,13 @@ testing:
   is_testing: False
   category: cable
   # Image score type name
-  image_score_type_name: std # max, mean, std
+  image_score_type_name: max # max, mean, std
   # Model path
-  vae_model_path:
-  diffusion_model_path:
+  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
+  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/mvtec_phase2_diffusion/diffu_pretrained/cable/diffusion_final.pth
   # Save dir
   test_result_base_dir: ../../mvtec_testing/
   # Visualization settings
   save_visualizations: True
-  max_visualization_batches: 5
-  max_images_per_batch: 8
+  max_visualization_batches: 4
+  max_images_per_batch: 16

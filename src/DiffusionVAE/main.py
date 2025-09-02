@@ -35,6 +35,3 @@ if __name__ == "__main__":
     if _is_diffu_training:
         print('training diffusion...')
         train_diffusion()
-
-    if _is_testing:
-        print('testing DiffusionVAE...')
