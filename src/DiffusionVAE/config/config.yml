@@ -12,7 +12,7 @@ training:
 
 general:
   seed: 42
-  batch_size: 4
+  batch_size: 1
   image_size: 256
   cuda: 0
 
@@ -88,7 +88,7 @@ diffusion_model:
     step_start_ema: 5000
     update_ema_every: 1
     ema_decay: 0.9999
-  resume_checkpoint:
+  resume_checkpoint: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/mvtec_phase2_diffusion/diffu_pretrained/cable/diffusion_final.pth
 
 testing:
   is_testing: False

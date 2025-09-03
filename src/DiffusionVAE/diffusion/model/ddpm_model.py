@@ -254,7 +254,7 @@ class DDPM(BaseModel):
         )
 
 
-    def save_network(self, epoch, iter_step, checkpoint_type="latest"):
+    def save_network(self, epoch, iter_step, checkpoint_type="latest", loss_history=None, eval_history=None, best_loss=None, best_epoch=None):
         # Create checkpoint directory if it doesn't exist
         if not os.path.exists(_pretrained_save_dir):
             os.makedirs(_pretrained_save_dir)
@@ -281,6 +281,16 @@ class DDPM(BaseModel):
             'checkpoint_type': checkpoint_type,
             'timestamp': time.time()
         }
+        
+        # Add training history if provided
+        if loss_history is not None:
+            checkpoint['loss_history'] = loss_history
+        if eval_history is not None:
+            checkpoint['eval_history'] = eval_history
+        if best_loss is not None:
+            checkpoint['best_loss'] = best_loss
+        if best_epoch is not None:
+            checkpoint['best_epoch'] = best_epoch
         
         # Add EMA model if available
         if _use_ema_scheduler:

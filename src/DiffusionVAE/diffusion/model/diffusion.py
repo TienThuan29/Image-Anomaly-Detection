@@ -99,10 +99,25 @@ class GaussianDiffusion(nn.Module):
         self.register_buffer('posterior_mean_coef2', to_torch(
             (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod)))
 
+    def _extract(self, a, t, x_shape):
+        device = a.device
+        B = x_shape[0]
+        if isinstance(t, int):
+            out = a[t].expand(B)  # [B]
+        else:
+            if t.dim() == 0:
+                t = t.view(1).expand(B)  # [B]
+            t = t.to(device=device, dtype=torch.long)
+            out = a.index_select(0, t)  # [B]
+        return out.view(B, *([1] * (len(x_shape) - 1)))  # [B,1,1,1]
 
+    # def predict_start_from_noise(self, x_t, t, noise):
+    #     return self.sqrt_recip_alphas_cumprod[t] * x_t - self.sqrt_recipm1_alphas_cumprod[t] * noise
     def predict_start_from_noise(self, x_t, t, noise):
-        return self.sqrt_recip_alphas_cumprod[t] * x_t - \
-               self.sqrt_recipm1_alphas_cumprod[t] * noise
+        # coeffs: [B,1,1,1]
+        coeff1 = self._extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape)
+        coeff2 = self._extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
+        return coeff1 * x_t - coeff2 * noise
 
     def q_posterior(self, x_start, x_t, t):
         posterior_mean = self.posterior_mean_coef1[t] * \
@@ -164,13 +179,90 @@ class GaussianDiffusion(nn.Module):
             return ret_img[-1]
 
     # based on p_mean_variance
-    def model_predictions(self, x, t, x_self_cond=None, clip_x_start=False, rederive_pred_noise=False, kwargs={}):
-        # model_output = self.model(x, t, x_self_cond)
+    # def model_predictions(self, x, t, x_self_cond=None, clip_x_start=False, rederive_pred_noise=False, kwargs={}):
+    #     # model_output = self.model(x, t, x_self_cond)
+    #
+    #     batch_size = x.shape[0]
+    #     noise_level = torch.FloatTensor(
+    #         [self.sqrt_alphas_cumprod_prev[t + 1]]).repeat(batch_size, 1).to(x.device)
+    #     model_output = self.denoise_fn(torch.cat([x_self_cond, x], dim=1), noise_level, **kwargs)
+    #
+    #     maybe_clip = partial(torch.clamp, min=-1., max=1.) if clip_x_start else identity
+    #
+    #     if self.objective == 'pred_noise':
+    #         pred_noise = model_output
+    #         x_start = self.predict_start_from_noise(x, t, pred_noise)
+    #         x_start = maybe_clip(x_start)
+    #
+    #         if clip_x_start and rederive_pred_noise:
+    #             pred_noise = self.predict_noise_from_start(x, t, x_start)
+    #
+    #     elif self.objective == 'pred_x0':
+    #         x_start = model_output
+    #         x_start = maybe_clip(x_start)
+    #         pred_noise = self.predict_noise_from_start(x, t, x_start)
+    #
+    #     elif self.objective == 'pred_v':
+    #         v = model_output
+    #         x_start = self.predict_start_from_v(x, t, v)
+    #         x_start = maybe_clip(x_start)
+    #         pred_noise = self.predict_noise_from_start(x, t, x_start)
+    #
+    #     from collections import namedtuple
+    #     ModelPrediction = namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
+    #     return ModelPrediction(pred_noise, x_start)
 
-        batch_size = x.shape[0]
-        noise_level = torch.FloatTensor(
-            [self.sqrt_alphas_cumprod_prev[t + 1]]).repeat(batch_size, 1).to(x.device)
-        model_output = self.denoise_fn(torch.cat([x_self_cond, x], dim=1), noise_level, **kwargs)
+    # based on p_mean_variance
+    def model_predictions(
+            self,
+            x,
+            t,
+            x_self_cond=None,
+            clip_x_start: bool = False,
+            rederive_pred_noise: bool = False,
+            kwargs=None,
+    ):
+        """
+        x: [B, C, H, W]
+        t: int | scalar LongTensor | LongTensor[B]
+        x_self_cond: [B, C, H, W] hoặc None (sẽ dùng zeros_like(x) nếu None)
+        """
+        if kwargs is None:
+            kwargs = {}
+
+        device = x.device
+        B = x.shape[0]
+
+        # self-conditioning
+        if x_self_cond is None:
+            x_self_cond = torch.zeros_like(x)
+
+        # Đảm bảo sqrt_alphas_cumprod_prev là Tensor trên đúng device/dtype
+        if torch.is_tensor(self.sqrt_alphas_cumprod_prev):
+            sqrt_prev = self.sqrt_alphas_cumprod_prev.to(
+                device=device, dtype=self.alphas_cumprod.dtype
+            )
+        else:
+            sqrt_prev = torch.as_tensor(
+                self.sqrt_alphas_cumprod_prev, device=device, dtype=self.alphas_cumprod.dtype
+            )
+
+        # Chuẩn hoá t -> LongTensor[B] và lấy (t+1) để tra sqrt_prev
+        if isinstance(t, int):
+            idx = torch.full((B,), min(t + 1, self.num_timesteps), device=device, dtype=torch.long)
+        else:
+            # t là tensor
+            if t.dim() == 0:
+                t = t.view(1).expand(B)
+            t = t.to(device=device, dtype=torch.long)
+            idx = (t + 1).clamp_max(self.num_timesteps)
+
+        # noise_level: [B, 1]
+        noise_level = sqrt_prev.index_select(0, idx).unsqueeze(1)
+
+        # Gộp điều kiện và gọi denoise_fn
+        model_input = torch.cat([x_self_cond, x], dim=1)
+        model_output = self.denoise_fn(model_input, noise_level, **kwargs)
 
         maybe_clip = partial(torch.clamp, min=-1., max=1.) if clip_x_start else identity
 
@@ -178,13 +270,11 @@ class GaussianDiffusion(nn.Module):
             pred_noise = model_output
             x_start = self.predict_start_from_noise(x, t, pred_noise)
             x_start = maybe_clip(x_start)
-
             if clip_x_start and rederive_pred_noise:
                 pred_noise = self.predict_noise_from_start(x, t, x_start)
 
         elif self.objective == 'pred_x0':
-            x_start = model_output
-            x_start = maybe_clip(x_start)
+            x_start = maybe_clip(model_output)
             pred_noise = self.predict_noise_from_start(x, t, x_start)
 
         elif self.objective == 'pred_v':
@@ -192,6 +282,9 @@ class GaussianDiffusion(nn.Module):
             x_start = self.predict_start_from_v(x, t, v)
             x_start = maybe_clip(x_start)
             pred_noise = self.predict_noise_from_start(x, t, x_start)
+
+        else:
+            raise ValueError(f"Unknown objective: {self.objective}")
 
         from collections import namedtuple
         ModelPrediction = namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
@@ -203,8 +296,8 @@ class GaussianDiffusion(nn.Module):
         device = self.betas.device
         sample_inter = (1 | (self.num_timesteps // 10))
 
-        self.ddim_sampling_eta = 1  # 0-> ddim 1 -> ddpm
-        self.sampling_timesteps = 5
+        self.ddim_sampling_eta = 0.0  # 0-> ddim 1 -> ddpm
+        self.sampling_timesteps = 100
         self.objective = 'pred_noise'
         batch, total_timesteps, sampling_timesteps, eta = shape[0], self.num_timesteps, self.sampling_timesteps, self.ddim_sampling_eta
 
@@ -217,6 +310,10 @@ class GaussianDiffusion(nn.Module):
         imgs = [img]
 
         x_start = None
+
+        initx = self.predictor(x_in)
+        self.pre_initx = initx
+        kwargs = {'guide': initx}
 
         for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
             time_cond = torch.full((batch,), time, device=device, dtype=torch.long)

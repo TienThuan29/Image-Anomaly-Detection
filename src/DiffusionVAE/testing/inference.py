@@ -136,24 +136,24 @@ def run_inference():
             labels = batch['label'].to(_device)  # [B]
 
             vae_reconstructions = vae_model.reconstruct(images)  # [B, C, H, W]
-            
-            # Diffusion Restoration using VAE reconstructions as input
+
             if config.diffusion_model.diffusion.conditional:
                 diffusion_reconstructions = diffusion_model.netG.super_resolution(
-                    vae_reconstructions, 
+                    vae_reconstructions,
                     continous=False
                 )  # [B, C, H, W]
             else:
-                # For non-conditional, use regular sample method
                 diffusion_reconstructions = diffusion_model.netG.sample(
-                    batch_size=images.size(0), 
+                    batch_size=images.size(0),
                     continous=False
                 )  # [B, C, H, W]
-            
-            # Calculate anomaly maps (difference between original and diffusion output)
+
+            # DDIM
+            # diffusion_reconstructions = diffusion_model.netG.ddim_sample(
+            #     vae_reconstructions
+            # )
+
             anomaly_maps = compute_anomaly_map(images, diffusion_reconstructions)  # [B, H, W]
-            
-            # Calculate image-level scores
             image_scores = calc_image_score(anomaly_maps, _image_score_type_name)  # [B]
             
             # Store results

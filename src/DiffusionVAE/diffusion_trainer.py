@@ -37,6 +37,7 @@ _vae_pretrained_path = config.diffusion_model.vae_pretrained_path
 # diffusion train
 _epochs = config.diffusion_model.epochs
 _eval_interval = config.diffusion_model.eval_interval
+_resume_checkpoint = config.diffusion_model.resume_checkpoint
 
 # save train results
 _train_result_dir = config.diffusion_model.train_result_base_dir + _category_name + "/"
@@ -56,6 +57,52 @@ def save_evaluation_log(epoch, image_auroc, pixel_auroc, log_dir):
         f.write(log_entry)
     
     print(f"Evaluation at epoch {epoch}: Image AUROC: {image_auroc:.4f}, Pixel AUROC: {pixel_auroc:.4f}")
+
+def load_checkpoint(checkpoint_path, diffusion_model, log_dir):
+    """Load checkpoint and return training state."""
+    print(f"Loading checkpoint from: {checkpoint_path}")
+    
+    # Load model checkpoint
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    
+    # Load model state
+    if 'model_state_dict' in checkpoint:
+        diffusion_model.netG.load_state_dict(checkpoint['model_state_dict'])
+        print("Model state loaded successfully")
+    
+    # Load optimizer state if available
+    if 'optimizer_state_dict' in checkpoint:
+        diffusion_model.optG.load_state_dict(checkpoint['optimizer_state_dict'])
+        print("Optimizer state loaded successfully")
+    
+    # Load iteration counter
+    if 'selfiter' in checkpoint:
+        diffusion_model.iter = checkpoint['selfiter']
+        print(f"Loaded iteration counter: {diffusion_model.iter}")
+    
+    # Load training history
+    loss_history = checkpoint.get('loss_history', [])
+    eval_history = checkpoint.get('eval_history', {'img_auroc': [], 'px_auroc': [], 'epochs': []})
+    best_loss = checkpoint.get('best_loss', float('inf'))
+    best_epoch = checkpoint.get('best_epoch', 0)
+    start_epoch = checkpoint.get('epoch', 0)
+    
+    print(f"Resuming from epoch {start_epoch}")
+    print(f"Previous best loss: {best_loss:.6f} at epoch {best_epoch}")
+    
+    # Load training logs if they exist
+    log_file = os.path.join(log_dir, 'training_log.json')
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, 'r') as f:
+                logs = json.load(f)
+            print(f"Loaded {len(logs)} previous training log entries")
+        except (FileNotFoundError, json.JSONDecodeError):
+            logs = []
+    else:
+        logs = []
+    
+    return start_epoch, loss_history, eval_history, best_loss, best_epoch, logs
 
 def train_diffusion():
     device = torch.device("cuda" if _cuda else "cpu")
@@ -97,11 +144,24 @@ def train_diffusion():
     eval_history = {'img_auroc': [], 'px_auroc': [], 'epochs': []}
     best_loss = float('inf')
     best_epoch = 0
+    logs = []
 
     diffusion_model = diffusion.model.create_model()
     diffusion_model.set_noise_schedule_for_training()
 
+    # Load checkpoint if resuming training
+    if _resume_checkpoint and os.path.exists(_resume_checkpoint):
+        start_epoch, loss_history, eval_history, best_loss, best_epoch, logs = load_checkpoint(
+            _resume_checkpoint, diffusion_model, _log_result_dir
+        )
+        print(f"Training resumed from epoch {start_epoch}")
+    else:
+        logs = []
+        if _resume_checkpoint:
+            print(f"Warning: Checkpoint path {_resume_checkpoint} not found. Starting from scratch.")
+
     print(f"Starting training for {total_epochs} epochs...")
+    print(f"Starting from epoch: {start_epoch + 1}")
     print(f"Evaluation interval: {_eval_interval} epochs")
     epoch_bar = tqdm(range(start_epoch, total_epochs), desc="Training Progress", position=0, leave=True)
     
@@ -156,16 +216,11 @@ def train_diffusion():
             'iter': diffusion_model.iter
         }
         
-        # Save training log
-        log_file = os.path.join(_log_result_dir, 'training_log.json')
-        try:
-            with open(log_file, 'r') as f:
-                logs = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            logs = []
-        
+        # Append to existing logs
         logs.append(log_entry)
         
+        # Save training log
+        log_file = os.path.join(_log_result_dir, 'training_log.json')
         with open(log_file, 'w') as f:
             json.dump(logs, f, indent=2)
 
@@ -173,7 +228,7 @@ def train_diffusion():
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             best_epoch = epoch + 1
-            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best")
+            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best", loss_history, eval_history, best_loss, best_epoch)
             print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
 
         # Run evaluation every eval_interval epochs
@@ -202,11 +257,11 @@ def train_diffusion():
             # trả noise schedule về trạng thái training
             diffusion_model.set_noise_schedule_for_training()
             # Save checkpoint
-            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest")
+            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest", loss_history, eval_history, best_loss, best_epoch)
 
         # Save final model at the end
         if epoch == total_epochs - 1:
-            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "final")
+            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "final", loss_history, eval_history, best_loss, best_epoch)
     
     # Save training summary
     training_summary = {
@@ -218,7 +273,8 @@ def train_diffusion():
         'loss_history': loss_history,
         'evaluation_history': eval_history,
         'training_completed': True,
-        'timestamp': time.time()
+        'timestamp': time.time(),
+        'resumed_from_checkpoint': _resume_checkpoint if _resume_checkpoint and os.path.exists(_resume_checkpoint) else None
     }
     
     summary_file = os.path.join(_train_result_dir, 'training_summary.json')
