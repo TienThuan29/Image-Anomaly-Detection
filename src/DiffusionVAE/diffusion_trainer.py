@@ -1,5 +1,5 @@
 import diffusion.model
-from vae.utils import load_vae
+from vae.utils import load_vae_model
 import torch
 import os
 import time
@@ -44,43 +44,31 @@ _train_result_dir = config.diffusion_model.train_result_base_dir + _category_nam
 _log_result_dir = config.diffusion_model.train_result_base_dir + _category_name + "/" + "log_results/"
 _pretrained_save_dir = config.diffusion_model.pretrained_save_base_dir + _category_name + "/"
 
+
 def save_evaluation_log(epoch, image_auroc, pixel_auroc, log_dir):
-    """Save evaluation results to a .txt log file."""
     log_file = os.path.join(log_dir, 'evaluation_log.txt')
-    
-    # Create log entry
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] Epoch {epoch}: Image AUROC: {image_auroc:.4f}, Pixel AUROC: {pixel_auroc:.4f}\n"
-    
-    # Append to log file
     with open(log_file, 'a') as f:
         f.write(log_entry)
     
     print(f"Evaluation at epoch {epoch}: Image AUROC: {image_auroc:.4f}, Pixel AUROC: {pixel_auroc:.4f}")
 
 def load_checkpoint(checkpoint_path, diffusion_model, log_dir):
-    """Load checkpoint and return training state."""
     print(f"Loading checkpoint from: {checkpoint_path}")
-    
-    # Load model checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
-    
-    # Load model state
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     if 'model_state_dict' in checkpoint:
         diffusion_model.netG.load_state_dict(checkpoint['model_state_dict'])
         print("Model state loaded successfully")
-    
-    # Load optimizer state if available
+
     if 'optimizer_state_dict' in checkpoint:
         diffusion_model.optG.load_state_dict(checkpoint['optimizer_state_dict'])
         print("Optimizer state loaded successfully")
-    
-    # Load iteration counter
+
     if 'selfiter' in checkpoint:
         diffusion_model.iter = checkpoint['selfiter']
         print(f"Loaded iteration counter: {diffusion_model.iter}")
-    
-    # Load training history
+
     loss_history = checkpoint.get('loss_history', [])
     eval_history = checkpoint.get('eval_history', {'img_auroc': [], 'px_auroc': [], 'epochs': []})
     best_loss = checkpoint.get('best_loss', float('inf'))
@@ -90,7 +78,6 @@ def load_checkpoint(checkpoint_path, diffusion_model, log_dir):
     print(f"Resuming from epoch {start_epoch}")
     print(f"Previous best loss: {best_loss:.6f} at epoch {best_epoch}")
     
-    # Load training logs if they exist
     log_file = os.path.join(log_dir, 'training_log.json')
     if os.path.exists(log_file):
         try:
@@ -126,7 +113,7 @@ def train_diffusion():
 
     # Load VAE model
     print("Loading VAE model...")
-    vae_model = load_vae(
+    vae_model = load_vae_model(
         checkpoint_path=_vae_pretrained_path,
         vae_name=_vae_name,
         input_channels=_input_channels,
@@ -232,32 +219,32 @@ def train_diffusion():
             print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
 
         # Run evaluation every eval_interval epochs
-        if (epoch + 1) % _eval_interval == 0:
-            print(f"\nRunning evaluation at epoch {epoch + 1}...")
-            diffusion_model.netG.eval()
-            # đặt noise schedule về num_step 200 cho testing
-            diffusion_model.set_noise_schedule_for_val()
-            # Run inference during training
-            image_auroc, pixel_auroc = run_inference_during_training(vae_model, diffusion_model, _train_result_dir)
-            
-            # Save evaluation log
-            save_evaluation_log(epoch + 1, image_auroc, pixel_auroc, _log_result_dir)
-            
-            # Store evaluation history
-            eval_history['epochs'].append(epoch + 1)
-            eval_history['img_auroc'].append(image_auroc)
-            eval_history['px_auroc'].append(pixel_auroc)
-            
-            # Save evaluation history
-            eval_history_file = os.path.join(_log_result_dir, 'evaluation_history.json')
-            with open(eval_history_file, 'w') as f:
-                json.dump(eval_history, f, indent=2)
-            
-            diffusion_model.netG.train()
-            # trả noise schedule về trạng thái training
-            diffusion_model.set_noise_schedule_for_training()
-            # Save checkpoint
-            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest", loss_history, eval_history, best_loss, best_epoch)
+        # if (epoch + 1) % _eval_interval == 0:
+        #     print(f"\nRunning evaluation at epoch {epoch + 1}...")
+        #     diffusion_model.netG.eval()
+        #     # đặt noise schedule về num_step 200 cho testing
+        #     diffusion_model.set_noise_schedule_for_val()
+        #     # Run inference during training
+        #     image_auroc, pixel_auroc = run_inference_during_training(vae_model, diffusion_model, _train_result_dir)
+        #
+        #     # Save evaluation log
+        #     save_evaluation_log(epoch + 1, image_auroc, pixel_auroc, _log_result_dir)
+        #
+        #     # Store evaluation history
+        #     eval_history['epochs'].append(epoch + 1)
+        #     eval_history['img_auroc'].append(image_auroc)
+        #     eval_history['px_auroc'].append(pixel_auroc)
+        #
+        #     # Save evaluation history
+        #     eval_history_file = os.path.join(_log_result_dir, 'evaluation_history.json')
+        #     with open(eval_history_file, 'w') as f:
+        #         json.dump(eval_history, f, indent=2)
+        #
+        #     diffusion_model.netG.train()
+        #     # trả noise schedule về trạng thái training
+        #     diffusion_model.set_noise_schedule_for_training()
+        #     # Save checkpoint
+        #     diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest", loss_history, eval_history, best_loss, best_epoch)
 
         # Save final model at the end
         if epoch == total_epochs - 1:
