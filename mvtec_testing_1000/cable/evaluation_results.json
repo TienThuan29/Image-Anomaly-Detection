@@ -1,0 +1,13 @@
+{
+  "category": "cable",
+  "image_auroc": {
+    "max": 0.49231634182908546,
+    "mean": 0.7698650674662669,
+    "std": 0.7280734632683659
+  },
+  "pixel_auroc": 0.8087575435638428,
+  "image_score_type": "all",
+  "total_samples": 150,
+  "anomaly_samples": 92,
+  "normal_samples": 58
+}

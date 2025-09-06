@@ -27,7 +27,23 @@ def eval_auroc_pixel(anomaly_maps: List[torch.Tensor], gt_masks: List[torch.Tens
     metric = AUROC(task="binary")
     return float(metric(pred, gt))
 
-def calc_image_score(anomaly_map, image_score_type_name):
+def calc_image_score(anomaly_maps, image_score_type_name):
+    if isinstance(anomaly_maps, list):
+        # Check if list is empty
+        if len(anomaly_maps) == 0:
+            raise ValueError("anomaly_maps list is empty")
+        
+        # Check if all tensors have the same shape
+        first_shape = anomaly_maps[0].shape
+        for i, tensor in enumerate(anomaly_maps):
+            if tensor.shape != first_shape:
+                raise ValueError(f"Tensor {i} has shape {tensor.shape}, expected {first_shape}")
+        
+        # Stack individual maps into batch format [N, H, W]
+        anomaly_map = torch.stack(anomaly_maps, dim=0)
+    else:
+        anomaly_map = anomaly_maps
+    
     if image_score_type_name == 'max':
         return anomaly_map.amax(dim=(1, 2))
     elif image_score_type_name == 'mean':

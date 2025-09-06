@@ -83,7 +83,7 @@ class ResnetBlocWithAttn(nn.Module):
 """ Conditional Intergration Module in pipeline """
 class ResnetBlockDY3h(nn.Module):
     def __init__(
-            self, dim, dim_out, nl_emb_dim=None,
+            self, dim, dim_out, nl_emb_dim=None, # dim = pre_channel, dim_out = channel_mults
             dropout=0, use_affine_level=False, norm_groups=1,
             nset=8 # N trong paper chính là nset trong code.
     ):
@@ -122,24 +122,32 @@ class ResnetBlockDY3h(nn.Module):
         """ Time embed -> Linear -> activation -> Linear """
         attw = self.noise_func(time_emb).view(b, -1)
         h = self.norm1(x)
-        h = self.conv1(h)
+        h = self.conv1(h) # [B, dim_out, H, W]
         h = self.swish(h)
         h = self.norm2(h)
         # h = self.conv2(h, attw)
 
+        # hset: chứa các phiên 'nset' phiên bản khác nhau của feature map h
+        hset = self.spdyconv(h).view(b, self.dim_out, self.nset, H, w)  # [B, dim_out, nset, H, W]
+
         """ AKGM - Adaptive Kernal Guidance Module """
         # An equivalent implementation of AKGM by using group conv
         # input: guide = x_init
-        ratio = w / guide.shape[-1]
+        ratio = w / guide.shape[-1]  # w : là chiều rộng của feature map x
+
+        # F.interpolate: đưa guide (ảnh hướng dẫn x_init) về cùng kích thước không gian (spatial size)
+        # với feature map x đang xử lý trong block của mạng.
         guide = F.interpolate(guide, scale_factor=ratio, mode='bilinear', align_corners=False)
 
         # conv2 : bao gồm Conv2d -> Simplegate -> Conv2d
         # att_sp = feature_map_G * S
         # M      = att_sp
-        att_sp = self.conv2(guide) * attw.view(b, self.nset, 1, 1)
+        att_sp = self.conv2(guide) * attw.view(b, self.nset, 1, 1) # fused using pointwise product
 
-        hset = self.spdyconv(h).view(b, self.dim_out, self.nset, H, w)
         h = torch.sum(hset * att_sp.unsqueeze(1), dim=2, keepdim=False)
+        # sum( [B, dim_out, nset, H, W] * [B, 1, nset, H, W] )
+        # Output: [B, dim_out, H, W]
+
         h = self.swish(h)
         # short cut của residual block
         return h + self.res_conv(x)

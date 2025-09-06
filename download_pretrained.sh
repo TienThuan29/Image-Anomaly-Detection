@@ -1,0 +1,1 @@
+gdown --fuzzy --folder "https://drive.google.com/drive/folders/1CF9xf9a-kF4k7YLNZ_shg9y-mubgILlN?usp=sharing" -O pre-trained

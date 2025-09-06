@@ -69,7 +69,7 @@ def _extract_state_dict(ckpt: dict):
 
 """ Load pre-trained vae model """
 @torch.no_grad()
-def load_vae(
+def load_vae_model(
         checkpoint_path: str,
         vae_name: str,
         input_channels: int,
@@ -93,7 +93,6 @@ def load_vae(
     else:
         raise ValueError(f"Unknown vae model: {vae_name}")
 
-    # DÙNG loader tương thích 2.6 (thử safe trước, rồi cảnh báo nếu fallback)
     ckpt = _torch_load_compat(checkpoint_path, map_location=device, allow_fallback_to_untrusted=True)
     state = _extract_state_dict(ckpt)
 
@@ -101,6 +100,7 @@ def load_vae(
     if missing or unexpected:
         print(f"[WARN] VAE missing keys: {missing}, Unexpected keys: {unexpected}")
 
+    model.to(device)
     model.eval()
     return model
 

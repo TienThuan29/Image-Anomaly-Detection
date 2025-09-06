@@ -8,7 +8,7 @@ training:
   # Training mode: True-True is continuous training phase 1 to phase 2 (no stop)
   is_vae_training: False
   is_diffu_training: True
-  category: cable
+  category: bottle
 
 general:
   seed: 42
@@ -66,7 +66,7 @@ diffusion_model:
       linear_end: 0.01
     val:
       schedule: linear
-      n_timestep: 200
+      n_timestep: 100
       linear_start: 0.000001
       linear_end: 0.1
   diffusion:
@@ -81,26 +81,27 @@ diffusion_model:
   optimizer_name: AdamW # Adam, SGD, AdamW
   train_result_base_dir: ../../mvtec_phase2_diffusion/train_results/
   pretrained_save_base_dir: ../../mvtec_phase2_diffusion/diffu_pretrained/
-  vae_pretrained_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
+  vae_pretrained_path:
   eval_interval: 10
   ema_scheduler:
     use: False
     step_start_ema: 5000
     update_ema_every: 1
     ema_decay: 0.9999
-  resume_checkpoint: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/mvtec_phase2_diffusion/diffu_pretrained/cable/diffusion_final.pth
+  resume_checkpoint:
 
 testing:
   is_testing: False
-  category: cable
+  category: bottle
+  batch_size: 1
   # Image score type name
-  image_score_type_name: max # max, mean, std
+  image_score_type_name: std # max, mean, std
   # Model path
-  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/src/main-v1.2/mvtec_phase1_vae/vae_pretrained/vae_resnet/resnet18/cable/cable_vae_best.pth
-  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/mvtec_phase2_diffusion/diffu_pretrained/cable/diffusion_final.pth
+  vae_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/mvtec_phase1_vae/train_results/vae_resnet/resnet18/bottle/bottle_vae_best.pth
+  diffusion_model_path: /home/tienthuan29/workspaces/projects/AiResearch/ImageAnomalyDetection/mvtec_phase2_diffusion/diffu_pretrained/bottle_500/diffusion_best.pth
   # Save dir
   test_result_base_dir: ../../mvtec_testing/
   # Visualization settings
   save_visualizations: True
-  max_visualization_batches: 4
+  max_visualization_batches: 30
   max_images_per_batch: 16

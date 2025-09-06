@@ -2,7 +2,6 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-
 def patch_forward_guide(noisy, kpn_net, params={}, skip=512, padding=32):
     ''' Args:
         noisy: b c h w
@@ -42,4 +41,3 @@ def patch_forward_guide(noisy, kpn_net, params={}, skip=512, padding=32):
             denoised[..., h_start + padding: h_end - padding, w_start + padding: w_end - padding] = \
                 out[..., padding:-padding, padding:-padding]
     return denoised[..., pd:-pd, pd:-pd]
-

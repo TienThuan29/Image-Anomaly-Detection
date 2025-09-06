@@ -193,3 +193,56 @@ def save_visualization_results(results: Dict, save_dir: str, category_name: str,
         if 'gt_masks' in results and i < len(results['gt_masks']):
             gt_pil = to_pil(results['gt_masks'][i])
             gt_pil.save(os.path.join(save_dir, f'batch_{batch_idx:03d}_sample_{i:02d}_gt_mask.png'))
+
+
+""" save visual after inference """
+def save_visualization(
+        testing_result_dir,
+        visualization_results,
+        max_images_per_batch,
+        testing_category
+):
+    print("Saving visualizations...")
+    vis_dir = os.path.join(testing_result_dir, 'visualizations_improved')
+    os.makedirs(vis_dir, exist_ok=True)
+
+    for batch_idx in range(len(visualization_results['input_images'])):
+        # Create visualization grid
+        fig = create_visualization_grid(
+            input_images=visualization_results['input_images'][batch_idx],
+            vae_reconstructions=visualization_results['vae_reconstructions'][batch_idx],
+            diffusion_reconstructions=visualization_results['diffusion_reconstructions'][batch_idx],
+            anomaly_maps=visualization_results['anomaly_maps'][batch_idx],
+            gt_masks=visualization_results['gt_masks'][batch_idx],
+            max_images=max_images_per_batch
+        )
+        # Save grid
+        grid_path = os.path.join(vis_dir, f'batch_{batch_idx:03d}_grid_improved.png')
+        fig.savefig(grid_path, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        # Save individual components
+        batch_vis_dir = os.path.join(vis_dir, f'batch_{batch_idx:03d}')
+        save_visualization_results(
+            results={
+                'input_images': [tensor_to_numpy(img) for img in visualization_results['input_images'][batch_idx]],
+                'vae_reconstructions': [tensor_to_numpy(img) for img in
+                                        visualization_results['vae_reconstructions'][batch_idx]],
+                'diffusion_reconstructions': [tensor_to_numpy(img) for img in
+                                              visualization_results['diffusion_reconstructions'][batch_idx]],
+                'heatmaps': [create_heatmap(am, am.shape[0], am.shape[1]) for am in
+                             visualization_results['anomaly_maps'][batch_idx]],
+                'overlays': [overlay_heatmap_on_image(
+                    tensor_to_numpy(visualization_results['input_images'][batch_idx][i]),
+                    create_heatmap(visualization_results['anomaly_maps'][batch_idx][i],
+                                   visualization_results['input_images'][batch_idx][i].shape[1],
+                                   visualization_results['input_images'][batch_idx][i].shape[2])
+                ) for i in range(len(visualization_results['input_images'][batch_idx]))],
+                'gt_masks': [tensor_to_numpy(mask) for mask in visualization_results['gt_masks'][batch_idx]]
+            },
+            save_dir=batch_vis_dir,
+            category_name=testing_category,
+            batch_idx=batch_idx
+        )
+    print(f"Visualizations saved to: {vis_dir}")
+
+
