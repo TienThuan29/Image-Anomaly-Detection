@@ -14,7 +14,7 @@ import numpy as np
 from vae.utils import load_vae_model
 from utils.feature_extractor import VggFeatureExtractor
 import torch.nn.functional as F
-from diffusion.model.ddpm_model import DDPM
+from diffusion.utils import load_diffusion_model
 
 config = load_config()
 
@@ -45,42 +45,6 @@ _test_batch_size = config.testing.batch_size
 # Device
 _device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
 
-""" Load diffusion restoration model """
-def load_diffusion_model(
-    in_channel: int,
-    inner_channel: int ,
-    out_channel: int,
-    norm_groups: int,
-    channel_mults: list,
-    attn_res: list,
-    res_blocks: int,
-    dropout_p: float,
-    image_size: int,
-    channels: int,
-    loss_type: str,
-    diffusion_model_path: str,
-    device
-):
-    diffusion_model = DDPM(
-        in_channel=in_channel,
-        out_channel=out_channel,
-        inner_channel=inner_channel,
-        norm_groups=norm_groups,
-        channel_mults=channel_mults,
-        attn_res=attn_res,
-        res_blocks=res_blocks,
-        dropout_p=dropout_p,
-        image_size=image_size,
-        channels=channels,
-        loss_type=loss_type
-    )
-
-    checkpoint = torch.load(diffusion_model_path, map_location=device)
-    diffusion_model.netG.load_state_dict(checkpoint['model_state_dict'])
-    diffusion_model.netG.to(device)
-    diffusion_model.netG.eval()
-
-    return diffusion_model
 
 def load_models():
     vae_model = load_vae_model(
@@ -148,9 +112,9 @@ def compute_anomaly_map(
     return anomaly_map
 
 
-def get_anomaly_maps(use_perceptual: bool):
+def get_anomaly_maps(use_perceptual: bool, testing_result_dir: str):
     set_seed(_seed)
-    os.makedirs(_testing_result_dir, exist_ok=True)
+    os.makedirs(testing_result_dir, exist_ok=True)
 
     vae_model, diffusion_model = load_models()
     print('Load vae, diffusion models success')
@@ -264,7 +228,7 @@ def run_all_inference():
     testing_result_dir = config.testing.test_result_base_dir + _testing_category + '/l1/'
 
     print('========== Only l1 diff ===========')
-    all_labels, all_anomaly_maps_l1, all_gt_masks, visualization_results = get_anomaly_maps(use_perceptual=False)
+    all_labels, all_anomaly_maps_l1, all_gt_masks, visualization_results = get_anomaly_maps(use_perceptual=False, testing_result_dir=testing_result_dir)
     l1_results = run_inference(all_labels, all_anomaly_maps_l1, all_gt_masks, use_perceptual=False)
     all_results.extend(l1_results)
 
@@ -283,7 +247,7 @@ def run_all_inference():
 
     testing_result_dir = config.testing.test_result_base_dir + _testing_category + '/l1_feature/'
     print('========= Use perceptual diff ==============')
-    all_labels, all_anomaly_maps, all_gt_masks, visualization_results = get_anomaly_maps(use_perceptual=True)
+    all_labels, all_anomaly_maps, all_gt_masks, visualization_results = get_anomaly_maps(use_perceptual=True, testing_result_dir=testing_result_dir)
     perceptual_results = run_inference(all_labels, all_anomaly_maps, all_gt_masks, use_perceptual=True)
     all_results.extend(perceptual_results)
 

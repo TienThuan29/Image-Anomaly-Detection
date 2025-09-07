@@ -1,4 +1,4 @@
-    import os
+import os
 import torch
 from tqdm import tqdm
 from config import load_config

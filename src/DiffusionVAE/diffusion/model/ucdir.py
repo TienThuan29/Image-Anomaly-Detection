@@ -3,7 +3,7 @@ import math
 from torch import nn
 from inspect import isfunction
 from torch.functional import F
-from diffusion.util import patch_forward_guide
+from diffusion.model.util import patch_forward_guide
 
 """ Positional Encoding for timestep"""
 class PositionalEncoding(nn.Module):

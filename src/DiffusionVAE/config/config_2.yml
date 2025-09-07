@@ -19,7 +19,7 @@ general:
 vae_model:
   name: vae_resnet # vae_resnet, vae_unet
   backbone: resnet18 # resnet18, resnet34, resnet50
-  lr: 3e-4
+  lr: 3e-4  # 1e-4
   epochs: 5000
   weight_decay: 1e-5
   z_dim: 256
@@ -41,7 +41,7 @@ vae_model:
 
 diffusion_model:
   phase: train
-  # unet setting
+  # Unet settings
   unet:
     in_channel: 6
     out_channel: 3

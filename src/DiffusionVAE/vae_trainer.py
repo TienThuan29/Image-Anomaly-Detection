@@ -172,6 +172,8 @@ def train_vae():
                 model, optimizer, scheduler, epoch, loss_epoch, best_loss,
                 _category_name, _pretrained_save_dir, "early_stop"
             )
+            epoch_bar.close()
+            break
 
         scheduler.step()
 

@@ -95,11 +95,9 @@ def load_vae_model(
 
     ckpt = _torch_load_compat(checkpoint_path, map_location=device, allow_fallback_to_untrusted=True)
     state = _extract_state_dict(ckpt)
-
     missing, unexpected = model.load_state_dict(state, strict=False)
-    if missing or unexpected:
-        print(f"[WARN] VAE missing keys: {missing}, Unexpected keys: {unexpected}")
-
+    # if missing or unexpected:
+    #     print(f"[WARN] VAE missing keys: {missing}, Unexpected keys: {unexpected}")
     model.to(device)
     model.eval()
     return model

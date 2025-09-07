@@ -20,7 +20,7 @@ from testing.metric import (
     compute_anomaly_map
 )
 from vae.utils import load_vae_model
-from diffusion.util import load_diffusion_model
+from diffusion.utils import load_diffusion_model
 
 config = load_config()
 
