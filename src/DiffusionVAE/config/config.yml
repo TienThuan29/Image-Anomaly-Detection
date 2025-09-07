@@ -76,7 +76,7 @@ diffusion_model:
   # # # #
   lr: 1e-4
   loss_type: l2 # l1, l2
-  epochs: 500
+  epochs: 3000
   weight_decay: 1e-5
   optimizer_name: AdamW # Adam, SGD, AdamW
   train_result_base_dir: ../../mvtec_phase2_diffusion/train_results/

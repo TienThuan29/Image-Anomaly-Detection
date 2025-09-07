@@ -8,7 +8,6 @@ import numpy as np
 from config import load_config
 from tqdm import tqdm
 from data.dataloader import load_mvtec_train_dataset
-from testing.inference import run_inference_during_training
 
 config = load_config()
 
@@ -218,33 +217,6 @@ def train_diffusion():
             diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best", loss_history, eval_history, best_loss, best_epoch)
             print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
 
-        # Run evaluation every eval_interval epochs
-        # if (epoch + 1) % _eval_interval == 0:
-        #     print(f"\nRunning evaluation at epoch {epoch + 1}...")
-        #     diffusion_model.netG.eval()
-        #     # đặt noise schedule về num_step 200 cho testing
-        #     diffusion_model.set_noise_schedule_for_val()
-        #     # Run inference during training
-        #     image_auroc, pixel_auroc = run_inference_during_training(vae_model, diffusion_model, _train_result_dir)
-        #
-        #     # Save evaluation log
-        #     save_evaluation_log(epoch + 1, image_auroc, pixel_auroc, _log_result_dir)
-        #
-        #     # Store evaluation history
-        #     eval_history['epochs'].append(epoch + 1)
-        #     eval_history['img_auroc'].append(image_auroc)
-        #     eval_history['px_auroc'].append(pixel_auroc)
-        #
-        #     # Save evaluation history
-        #     eval_history_file = os.path.join(_log_result_dir, 'evaluation_history.json')
-        #     with open(eval_history_file, 'w') as f:
-        #         json.dump(eval_history, f, indent=2)
-        #
-        #     diffusion_model.netG.train()
-        #     # trả noise schedule về trạng thái training
-        #     diffusion_model.set_noise_schedule_for_training()
-        #     # Save checkpoint
-        #     diffusion_model.save_network(epoch + 1, diffusion_model.iter, "latest", loss_history, eval_history, best_loss, best_epoch)
 
         # Save final model at the end
         if epoch == total_epochs - 1:

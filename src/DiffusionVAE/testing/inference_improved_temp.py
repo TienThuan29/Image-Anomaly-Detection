@@ -157,25 +157,11 @@ def compute_anomaly_map_improved(x, x_recon, feature_extractor=None,
     return anomaly_map
 
 def compute_anomaly_map_advanced(x, x_recon, feature_extractor=None):
-    """
-    Advanced anomaly map computation with multiple strategies
-    
-    Args:
-        x: Original images [B, C, H, W]
-        x_recon: Reconstructed images [B, C, H, W]
-        feature_extractor: FeatureExtractor instance
-    
-    Returns:
-        dict: Dictionary containing different types of anomaly maps
-    """
     results = {}
-    
     # 1. L1 pixel difference
     results['l1'] = (x - x_recon).abs().mean(dim=1)
-    
     # 2. L2 pixel difference
     results['l2'] = ((x - x_recon) ** 2).mean(dim=1).sqrt()
-    
     # 3. SSIM-based difference (simplified)
     mu1 = x.mean(dim=1, keepdim=True)
     mu2 = x_recon.mean(dim=1, keepdim=True)
@@ -209,9 +195,7 @@ def compute_anomaly_map_advanced(x, x_recon, feature_extractor=None):
     
     if 'perceptual' in results:
         combined += 0.1 * results['perceptual']
-    
     results['combined'] = combined
-    
     return results
 
 def load_diffusion_model():
