@@ -209,21 +209,30 @@ def run_all_inference():
 
 def run_inference_during_training(vae_model, diffusion_model, epoch):
     set_seed(_seed)
+    diffusion_model.netG.eval()
     all_results = []
     testing_result_dir = config.testing.test_result_base_dir + _testing_category + '/l1/'
     os.makedirs(testing_result_dir, exist_ok=True)
-    print("======= Inference during the training =======")
-    all_labels, all_anomaly_maps_l1, all_gt_masks, visualization_results = get_anomaly_maps(
-        vae_model=vae_model,
-        diffusion_model=diffusion_model,
-        is_visualization=False
-    )
-    l1_results = run_inference(all_labels, all_anomaly_maps_l1, all_gt_masks)
-    all_results.extend(l1_results)
+    
+    print(f'======= Inference during the at epoch {epoch} =======')
+    diffusion_model.set_noise_schedule_for_val()
+    try:
+        all_labels, all_anomaly_maps_l1, all_gt_masks, visualization_results = get_anomaly_maps(
+            vae_model=vae_model,
+            diffusion_model=diffusion_model,
+            is_visualization=False
+        )
+        l1_results = run_inference(all_labels, all_anomaly_maps_l1, all_gt_masks)
+        all_results.extend(l1_results)
 
-    results_path = os.path.join(testing_result_dir, f'inference_at_epoch_{epoch}.json')
-    with open(results_path, 'w') as f:
-        json.dump(all_results, f, indent=2)
+        results_path = os.path.join(testing_result_dir, f'inference_at_epoch_{epoch}.json')
+        with open(results_path, 'w') as f:
+            json.dump(all_results, f, indent=2)
+    finally:
+        diffusion_model.set_noise_schedule_for_training()
+        diffusion_model.netG.train()
+    
+    return all_results
 
 
 # import os

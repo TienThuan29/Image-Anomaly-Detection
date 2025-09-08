@@ -126,6 +126,10 @@ def train_diffusion():
     eval_history = {'img_auroc': [], 'px_auroc': [], 'epochs': []}
     best_loss = float('inf')
     best_epoch = 0
+    best_eval_px = -float('inf')
+    best_eval_img = -float('inf')
+    best_eval_type = None
+    best_eval_epoch = 0
     logs = []
 
     diffusion_model = diffusion.model.create_model()
@@ -200,12 +204,48 @@ def train_diffusion():
         with open(log_file, 'w') as f:
             json.dump(logs, f, indent=2)
 
-        # Save best model if current loss is better
-        if epoch_loss < best_loss:
-            best_loss = epoch_loss
-            best_epoch = epoch + 1
-            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best", loss_history, eval_history, best_loss, best_epoch)
-            print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
+        # Periodic evaluation and best-by-eval checkpointing
+        current_epoch_num = epoch + 1
+        should_eval = current_epoch_num >= _begin_eval_at_epoch and ((current_epoch_num - _begin_eval_at_epoch) % _eval_interval == 0)
+        if should_eval:
+            try:
+                eval_results = run_inference_during_training(vae_model=vae_model, diffusion_model=diffusion_model, epoch=current_epoch_num)
+                # eval_results is a list of dicts for different image score types; pixel_auroc is same across
+                if isinstance(eval_results, list) and len(eval_results) > 0 and 'pixel_auroc' in eval_results[0]:
+                    pixel_auroc = float(eval_results[0]['pixel_auroc'])
+                    # collect all image aurocs by type
+                    image_aurocs_by_type = {}
+                    for r in eval_results:
+                        t = r.get('image_score_type', 'unknown')
+                        image_aurocs_by_type[t] = float(r.get('image_auroc', 0.0))
+                    # choose best type by highest image auroc
+                    best_type_now, best_image_now = max(image_aurocs_by_type.items(), key=lambda kv: kv[1])
+
+                    eval_history['px_auroc'].append(pixel_auroc)
+                    eval_history['img_auroc'].append(image_aurocs_by_type)
+                    eval_history['epochs'].append(current_epoch_num)
+
+                    # Save best based on image AUROC (tie-breaker: pixel AUROC)
+                    improved = (best_image_now > best_eval_img) or (best_image_now == best_eval_img and pixel_auroc > best_eval_px)
+                    if improved:
+                        best_eval_img = best_image_now
+                        best_eval_px = pixel_auroc
+                        best_eval_type = best_type_now
+                        best_eval_epoch = current_epoch_num
+                        diffusion_model.save_network(current_epoch_num, diffusion_model.iter, "best_eval", loss_history, eval_history, best_loss, best_epoch)
+                        print(f"\nNew best-eval model saved! Image AUROC: {best_eval_img:.6f} (type={best_eval_type}), Pixel AUROC: {best_eval_px:.6f} at epoch {best_eval_epoch}")
+                        # If an old loss-based best exists, remove it to avoid confusion
+                        legacy_best_path = os.path.join(_pretrained_save_dir, 'diffusion_best.pth')
+                        if os.path.exists(legacy_best_path):
+                            try:
+                                os.remove(legacy_best_path)
+                                print(f"Removed legacy loss-based best checkpoint: {legacy_best_path}")
+                            except Exception as e:
+                                print(f"Warning: failed to remove legacy checkpoint {legacy_best_path}: {e}")
+                    else:
+                        print(f"Eval at epoch {current_epoch_num}: best image AUROC now={best_image_now:.6f} (type={best_type_now}), pixel AUROC={pixel_auroc:.6f}. Best so far: image {best_eval_img:.6f} (type={best_eval_type}) at epoch {best_eval_epoch}, pixel {best_eval_px:.6f}")
+            except Exception as e:
+                print(f"Warning: evaluation failed at epoch {current_epoch_num}: {e}")
 
 
         # Save final model at the end
