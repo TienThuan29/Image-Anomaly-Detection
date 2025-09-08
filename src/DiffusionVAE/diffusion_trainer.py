@@ -8,6 +8,7 @@ import numpy as np
 from config import load_config
 from tqdm import tqdm
 from data.dataloader import load_mvtec_train_dataset
+from testing.inference import run_inference_during_training
 
 config = load_config()
 
@@ -35,23 +36,18 @@ _vae_pretrained_path = config.diffusion_model.vae_pretrained_path
 
 # diffusion train
 _epochs = config.diffusion_model.epochs
-_eval_interval = config.diffusion_model.eval_interval
 _resume_checkpoint = config.diffusion_model.resume_checkpoint
+
+# eval
+_begin_eval_at_epoch = config.diffusion_model.begin_eval_at_epoch
+_eval_interval = config.diffusion_model.eval_interval
+_save_model_each = config.diffusion_model.save_model_each
 
 # save train results
 _train_result_dir = config.diffusion_model.train_result_base_dir + _category_name + "/"
 _log_result_dir = config.diffusion_model.train_result_base_dir + _category_name + "/" + "log_results/"
 _pretrained_save_dir = config.diffusion_model.pretrained_save_base_dir + _category_name + "/"
 
-
-def save_evaluation_log(epoch, image_auroc, pixel_auroc, log_dir):
-    log_file = os.path.join(log_dir, 'evaluation_log.txt')
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] Epoch {epoch}: Image AUROC: {image_auroc:.4f}, Pixel AUROC: {pixel_auroc:.4f}\n"
-    with open(log_file, 'a') as f:
-        f.write(log_entry)
-    
-    print(f"Evaluation at epoch {epoch}: Image AUROC: {image_auroc:.4f}, Pixel AUROC: {pixel_auroc:.4f}")
 
 def load_checkpoint(checkpoint_path, diffusion_model, log_dir):
     print(f"Loading checkpoint from: {checkpoint_path}")
@@ -165,10 +161,7 @@ def train_diffusion():
             with torch.no_grad():
                 vae_reconstructed, _, _ = vae_model(images)
 
-            diffusion_model.feed_data({
-                'HR': images,
-                'SR': vae_reconstructed
-            })
+            diffusion_model.feed_data({'HR': images,'SR': vae_reconstructed})
 
             diffusion_model.optimize_parameters()
             
@@ -177,10 +170,7 @@ def train_diffusion():
             batch_losses.append(current_loss)
             
             # Update batch progress bar
-            batch_bar.set_postfix({
-                'Loss': f'{current_loss:.6f}',
-                'Avg Loss': f'{np.mean(batch_losses):.6f}'
-            })
+            batch_bar.set_postfix({'Loss': f'{current_loss:.6f}','Avg Loss': f'{np.mean(batch_losses):.6f}'})
 
         # Calculate epoch statistics
         epoch_loss = np.mean(batch_losses)

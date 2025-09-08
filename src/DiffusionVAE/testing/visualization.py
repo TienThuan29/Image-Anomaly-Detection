@@ -203,7 +203,7 @@ def save_visualization(
         testing_category
 ):
     print("Saving visualizations...")
-    vis_dir = os.path.join(testing_result_dir, 'visualizations_improved')
+    vis_dir = os.path.join(testing_result_dir, 'visualizations')
     os.makedirs(vis_dir, exist_ok=True)
 
     for batch_idx in range(len(visualization_results['input_images'])):

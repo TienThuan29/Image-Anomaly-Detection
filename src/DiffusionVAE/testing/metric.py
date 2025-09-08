@@ -4,6 +4,7 @@ import numpy as np
 from typing import List
 from sklearn.metrics import roc_auc_score
 from torchmetrics import AUROC
+from torch.functional import F
 
 
 def normalize_maps_global(anomaly_maps: List[torch.Tensor]) -> List[torch.Tensor]:
@@ -32,7 +33,6 @@ def calc_image_score(anomaly_maps, image_score_type_name):
         # Check if list is empty
         if len(anomaly_maps) == 0:
             raise ValueError("anomaly_maps list is empty")
-        
         # Check if all tensors have the same shape
         first_shape = anomaly_maps[0].shape
         for i, tensor in enumerate(anomaly_maps):

@@ -12,7 +12,7 @@ training:
 
 general:
   seed: 42
-  batch_size: 1
+  batch_size: 2
   image_size: 256
   cuda: 0
 
@@ -51,22 +51,23 @@ diffusion_model:
       - 2
       - 4
       - 8
-      - 8
+      - 16
     attn_res:
+      - 32
       - 16
     res_blocks: 2
     dropout: 0.1
-    norm_groups: 1
+    norm_groups: 8
   # diffusion setting
   beta_schedule:
     train:
       schedule: linear
-      n_timestep: 1000
+      n_timestep: 2000
       linear_start: 0.000001
       linear_end: 0.01
     val:
       schedule: linear
-      n_timestep: 100
+      n_timestep: 200
       linear_start: 0.000001
       linear_end: 0.1
   diffusion:
@@ -82,9 +83,11 @@ diffusion_model:
   train_result_base_dir: ../../mvtec_phase2_diffusion/train_results/
   pretrained_save_base_dir: ../../mvtec_phase2_diffusion/diffu_pretrained/
   vae_pretrained_path:
-  eval_interval: 10
+  begin_eval_at_epoch: 400
+  eval_interval: 50
+  save_model_each: 200
   ema_scheduler:
-    use: False
+    use: True
     step_start_ema: 2000
     update_ema_every: 1
     ema_decay: 0.9999
