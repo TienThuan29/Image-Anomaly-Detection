@@ -16,7 +16,6 @@ from vae.early_stopping import LossEarlyStopping
 config = load_config()
 
 # general
-_cuda = config.general.cuda
 _image_size = config.general.image_size
 _batch_size = config.general.batch_size
 
@@ -73,7 +72,7 @@ def vae_loss_function(
 
 
 def train_vae():
-    device = torch.device(f"cuda:{_cuda}" if _cuda >= 0 and torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f'Training VAE on class: {_category_name}')
     print(f"Device: {device}")
     print(f"Batch size: {_batch_size}")

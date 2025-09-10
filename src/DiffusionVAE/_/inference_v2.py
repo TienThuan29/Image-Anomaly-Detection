@@ -43,7 +43,7 @@ _dropout_p = config.vae_model.dropout_p
 # test batch size
 _test_batch_size = config.testing.batch_size
 # Device
-_device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def load_models():
@@ -56,7 +56,7 @@ def load_models():
         backbone=_backbone,
         dropout_p=_dropout_p,
         image_size=_image_size,
-        device=_device
+        device=device
     )
     diffusion_model = load_diffusion_model(
         in_channel=config.diffusion_model.unet.in_channel,
@@ -71,7 +71,7 @@ def load_models():
         channels=config.diffusion_model.diffusion.channels,
         loss_type=config.diffusion_model.loss_type,
         diffusion_model_path=_diffusion_model_path,
-        device=_device
+        device=device
     )
     diffusion_model.set_noise_schedule_for_val()
     return vae_model, diffusion_model
@@ -118,7 +118,7 @@ def get_anomaly_maps(use_perceptual: bool, testing_result_dir: str):
 
     vae_model, diffusion_model = load_models()
     print('Load vae, diffusion models success')
-    feature_extractor = VggFeatureExtractor(_device) if use_perceptual else None
+    feature_extractor = VggFeatureExtractor(device) if use_perceptual else None
     if use_perceptual:
         print('Load Vgg16 success')
 
@@ -144,9 +144,9 @@ def get_anomaly_maps(use_perceptual: bool, testing_result_dir: str):
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(tqdm(test_loader, desc="run inference ")):
-            images = batch['image'].to(_device)  # [B, C, H, W]
-            masks = batch['mask'].to(_device)  # [B, 1, H, W]
-            labels = batch['label'].to(_device)  # [B]
+            images = batch['image'].to(device)  # [B, C, H, W]
+            masks = batch['mask'].to(device)  # [B, 1, H, W]
+            labels = batch['label'].to(device)  # [B]
 
             vae_reconstructions, _, _ = vae_model(images)  # [B, C, H, W]
             if config.diffusion_model.diffusion.conditional:

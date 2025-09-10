@@ -13,7 +13,6 @@ from testing.inference import run_inference_during_training
 config = load_config()
 
 # general
-_cuda = config.general.cuda
 _image_size = config.general.image_size
 _batch_size = config.general.batch_size
 
@@ -87,7 +86,7 @@ def load_checkpoint(checkpoint_path, diffusion_model, log_dir):
     return start_epoch, loss_history, eval_history, best_loss, best_epoch, logs
 
 def train_diffusion():
-    device = torch.device("cuda" if _cuda else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f'Training diffusion for image restoration on class: {_category_name}')
     print(f"Batch size: {_batch_size}")
     print(f"VAE name: {_vae_name}")
@@ -203,6 +202,13 @@ def train_diffusion():
         log_file = os.path.join(_log_result_dir, 'training_log.json')
         with open(log_file, 'w') as f:
             json.dump(logs, f, indent=2)
+
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            best_epoch = epoch + 1
+            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best", loss_history, eval_history, best_loss,
+                                         best_epoch)
+            print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
 
         # Periodic evaluation and best-by-eval checkpointing
         current_epoch_num = epoch + 1

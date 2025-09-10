@@ -49,7 +49,7 @@ _z_dim = config.vae_model.z_dim
 _dropout_p = config.vae_model.dropout_p
 
 # Device
-_device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class FeatureExtractor:
     """Feature extractor using pre-trained VGG16 for perceptual loss"""
@@ -213,9 +213,9 @@ def load_diffusion_model():
         loss_type=config.diffusion_model.loss_type
     )
 
-    checkpoint = torch.load(_diffusion_model_path, map_location=_device)
+    checkpoint = torch.load(_diffusion_model_path, map_location=device)
     diffusion_model.netG.load_state_dict(checkpoint['model_state_dict'])
-    diffusion_model.netG.to(_device)
+    diffusion_model.netG.to(device)
     diffusion_model.netG.eval()
 
     val_schedule = config.diffusion_model.beta_schedule.val
@@ -249,17 +249,17 @@ def run_inference_improved(use_advanced=False, save_individual_maps=True):
         backbone=_backbone,
         dropout_p=_dropout_p,
         image_size=_image_size,
-        device=_device
+        device=device
     )
     diffusion_model = load_diffusion_model()
     diffusion_model.set_noise_schedule_for_val()
 
     # Initialize feature extractor for perceptual loss
-    feature_extractor = FeatureExtractor(_device)
+    feature_extractor = FeatureExtractor(device)
     print("Feature extractor (VGG16) loaded successfully")
 
-    vae_model = vae_model.to(_device)
-    diffusion_model.netG = diffusion_model.netG.to(_device)
+    vae_model = vae_model.to(device)
+    diffusion_model.netG = diffusion_model.netG.to(device)
     test_loader = load_mvtec_test_dataset(
         dataset_root_dir=config.data.mvtec_data_dir,
         category=_testing_category,
@@ -299,9 +299,9 @@ def run_inference_improved(use_advanced=False, save_individual_maps=True):
         for batch_idx, batch in enumerate(tqdm(test_loader, desc="Running improved inference")):
             
             # Extract data from batch dictionary
-            images = batch['image'].to(_device)  # [B, C, H, W]
-            masks = batch['mask'].to(_device)    # [B, 1, H, W]
-            labels = batch['label'].to(_device)  # [B]
+            images = batch['image'].to(device)  # [B, C, H, W]
+            masks = batch['mask'].to(device)    # [B, 1, H, W]
+            labels = batch['label'].to(device)  # [B]
 
             vae_reconstructions = vae_model.reconstruct(images)  # [B, C, H, W]
 
@@ -492,7 +492,7 @@ def run_inference_during_training_improved(vae_model, diffusion_model, result_di
     """Run improved inference during training with optional custom result directory."""
     
     # Define device
-    device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Ensure models are on the correct device and in eval mode
     vae_model = vae_model.to(device)

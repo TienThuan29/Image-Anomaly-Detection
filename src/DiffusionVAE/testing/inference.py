@@ -41,7 +41,7 @@ _dropout_p = config.vae_model.dropout_p
 # test batch size
 _test_batch_size = config.testing.batch_size
 # Device
-_device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def load_models():
@@ -54,7 +54,7 @@ def load_models():
         backbone=_backbone,
         dropout_p=_dropout_p,
         image_size=_image_size,
-        device=_device
+        device=device
     )
     diffusion_model = load_diffusion_model(
         in_channel=config.diffusion_model.unet.in_channel,
@@ -69,7 +69,7 @@ def load_models():
         channels=config.diffusion_model.diffusion.channels,
         loss_type=config.diffusion_model.loss_type,
         diffusion_model_path=_diffusion_model_path,
-        device=_device
+        device=device
     )
     diffusion_model.set_noise_schedule_for_val()
     return vae_model, diffusion_model
@@ -84,8 +84,6 @@ def set_seed(seed):
 
 
 def get_anomaly_maps(vae_model, diffusion_model, is_visualization=True):
-    print('Load vae, diffusion models success')
-
     test_loader = load_mvtec_test_dataset(
         dataset_root_dir=_mvtec_data_dir,
         category=_testing_category,

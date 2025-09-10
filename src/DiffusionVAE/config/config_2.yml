@@ -14,7 +14,6 @@ general:
   seed: 42
   batch_size: 2
   image_size: 256
-  cuda: 0
 
 vae_model:
   name: vae_resnet # vae_resnet, vae_unet

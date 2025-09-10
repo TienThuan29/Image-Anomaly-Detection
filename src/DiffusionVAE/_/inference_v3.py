@@ -43,7 +43,7 @@ _dropout_p = config.vae_model.dropout_p
 # test batch size
 _test_batch_size = config.testing.batch_size
 # Device
-_device = torch.device(f'cuda:{config.general.cuda}' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Testing result directory
 _testing_result_dir = config.testing.test_result_base_dir + _testing_category + '/'
