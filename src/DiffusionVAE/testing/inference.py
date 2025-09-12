@@ -9,7 +9,8 @@ from testing.metric import (
     calc_image_score,
     eval_auroc_image,
     eval_auroc_pixel,
-    compute_anomaly_map
+    compute_anomaly_map,
+    calc_ssim
 )
 import numpy as np
 from vae.utils import load_vae_model
@@ -83,14 +84,14 @@ def set_seed(seed):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
 
-def get_anomaly_maps(vae_model, diffusion_model, is_visualization=True):
+def get_anomaly_maps(vae_model, diffusion_model, is_visualization=True, method='l1'):
     test_loader = load_mvtec_test_dataset(
         dataset_root_dir=_mvtec_data_dir,
         category=_testing_category,
         image_size=_image_size,
         batch_size=_test_batch_size
     )
-    print(f"Test on {_testing_category} category")
+    print(f"Test on {_testing_category} category using {method.upper()} method")
 
     batch_count = 0
     all_labels = []
@@ -106,9 +107,9 @@ def get_anomaly_maps(vae_model, diffusion_model, is_visualization=True):
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(tqdm(test_loader, desc="run inference ")):
-            images = batch['image'].to(_device)  # [B, C, H, W]
-            masks = batch['mask'].to(_device)  # [B, 1, H, W]
-            labels = batch['label'].to(_device)  # [B]
+            images = batch['image'].to(device)  # [B, C, H, W]
+            masks = batch['mask'].to(device)  # [B, 1, H, W]
+            labels = batch['label'].to(device)  # [B]
 
             vae_reconstructions, _, _ = vae_model(images)  # [B, C, H, W]
             if config.diffusion_model.diffusion.conditional:
@@ -122,11 +123,19 @@ def get_anomaly_maps(vae_model, diffusion_model, is_visualization=True):
                     continous=False
                 )  # [B, C, H, W]
 
-            # Compute anomaly maps
-            anomaly_maps = compute_anomaly_map(
-                x=images,
-                x_recon=diffusion_reconstructions
-            )
+            # Compute anomaly maps based on method
+            if method == 'l1':
+                anomaly_maps = compute_anomaly_map(
+                    x=images,
+                    x_recon=diffusion_reconstructions
+                )
+            elif method == 'ssim':
+                anomaly_maps = calc_ssim(
+                    x=images,
+                    x_recon=diffusion_reconstructions
+                )
+            else:
+                raise ValueError(f"Unsupported method: {method}. Use 'l1' or 'ssim'.")
 
             all_labels.extend(labels.cpu().numpy().tolist())
             all_anomaly_maps.extend([am.cpu() for am in anomaly_maps])
@@ -146,7 +155,7 @@ def get_anomaly_maps(vae_model, diffusion_model, is_visualization=True):
     return all_labels, all_anomaly_maps, all_gt_masks, visualization_results
 
 
-def run_inference(all_labels, all_anomaly_maps, all_gt_masks):
+def run_inference(all_labels, all_anomaly_maps, all_gt_masks, method='l1'):
     results = []
     score_types = ['max', 'mean', 'std']
 
@@ -158,7 +167,7 @@ def run_inference(all_labels, all_anomaly_maps, all_gt_masks):
 
         evaluation_result = {
             'category': _testing_category,
-            'method': 'l1',
+            'method': method,
             'image_auroc': image_auroc,
             'pixel_auroc': pixel_auroc,
             'image_score_type': score_type,
@@ -180,15 +189,115 @@ def run_inference(all_labels, all_anomaly_maps, all_gt_masks):
 def run_all_inference():
     set_seed(_seed)
     all_results = []
-    testing_result_dir = config.testing.test_result_base_dir + _testing_category + '/l1/'
+    vae_model, diffusion_model = load_models()
 
+    # Run L1-based inference
+    print('========== L1 diff ===========')
+    testing_result_dir_l1 = config.testing.test_result_base_dir + _testing_category + '/l1/'
+    os.makedirs(testing_result_dir_l1, exist_ok=True)
+    
+    all_labels_l1, all_anomaly_maps_l1, all_gt_masks_l1, visualization_results_l1 = get_anomaly_maps(
+        vae_model=vae_model, 
+        diffusion_model=diffusion_model, 
+        method='l1'
+    )
+    l1_results = run_inference(all_labels_l1, all_anomaly_maps_l1, all_gt_masks_l1, method='l1')
+    all_results.extend(l1_results)
+
+    # Run SSIM-based inference
+    print('========== SSIM diff ===========')
+    testing_result_dir_ssim = config.testing.test_result_base_dir + _testing_category + '/ssim/'
+    os.makedirs(testing_result_dir_ssim, exist_ok=True)
+    
+    all_labels_ssim, all_anomaly_maps_ssim, all_gt_masks_ssim, visualization_results_ssim = get_anomaly_maps(
+        vae_model=vae_model, 
+        diffusion_model=diffusion_model, 
+        method='ssim'
+    )
+    ssim_results = run_inference(all_labels_ssim, all_anomaly_maps_ssim, all_gt_masks_ssim, method='ssim')
+    all_results.extend(ssim_results)
+
+    # Save L1 results and visualizations
+    if _save_visualizations:
+        save_visualization(
+            testing_result_dir=testing_result_dir_l1,
+            visualization_results=visualization_results_l1,
+            max_images_per_batch=_max_images_per_batch,
+            testing_category=_testing_category
+        )
+    l1_results_path = os.path.join(testing_result_dir_l1, f'inference_results.json')
+    with open(l1_results_path, 'w') as f:
+        json.dump(l1_results, f, indent=2)
+    print(f"L1 results saved to: {l1_results_path}")
+
+    # Save SSIM results and visualizations
+    if _save_visualizations:
+        save_visualization(
+            testing_result_dir=testing_result_dir_ssim,
+            visualization_results=visualization_results_ssim,
+            max_images_per_batch=_max_images_per_batch,
+            testing_category=_testing_category
+        )
+    ssim_results_path = os.path.join(testing_result_dir_ssim, f'inference_results.json')
+    with open(ssim_results_path, 'w') as f:
+        json.dump(ssim_results, f, indent=2)
+    print(f"SSIM results saved to: {ssim_results_path}")
+
+    # Save combined results
+    combined_results_path = os.path.join(config.testing.test_result_base_dir + _testing_category, f'combined_inference_results.json')
+    os.makedirs(os.path.dirname(combined_results_path), exist_ok=True)
+    with open(combined_results_path, 'w') as f:
+        json.dump(all_results, f, indent=2)
+    print(f"Combined results saved to: {combined_results_path}")
+    
+    return all_results
+
+
+def run_inference_during_training(vae_model, diffusion_model, epoch, method):
+    set_seed(_seed)
+    diffusion_model.netG.eval()
+    all_results = []
+    testing_result_dir = config.testing.test_result_base_dir + _testing_category + f'/{method}/'
+    os.makedirs(testing_result_dir, exist_ok=True)
+    
+    print(f'======= {method.upper()} Inference during training at epoch {epoch} =======')
+    diffusion_model.set_noise_schedule_for_val()
+    try:
+        all_labels, all_anomaly_maps, all_gt_masks, visualization_results = get_anomaly_maps(
+            vae_model=vae_model,
+            diffusion_model=diffusion_model,
+            is_visualization=False,
+            method=method
+        )
+        results = run_inference(all_labels, all_anomaly_maps, all_gt_masks, method=method)
+        all_results.extend(results)
+
+        results_path = os.path.join(testing_result_dir, f'inference_at_epoch_{epoch}.json')
+        with open(results_path, 'w') as f:
+            json.dump(all_results, f, indent=2)
+    finally:
+        diffusion_model.set_noise_schedule_for_training()
+        diffusion_model.netG.train()
+    
+    return all_results
+
+
+def run_ssim_inference():
+    """Run SSIM-based inference only."""
+    set_seed(_seed)
+    all_results = []
+    testing_result_dir = config.testing.test_result_base_dir + _testing_category + '/ssim/'
     os.makedirs(testing_result_dir, exist_ok=True)
     vae_model, diffusion_model = load_models()
 
-    print('========== L1 diff ===========')
-    all_labels, all_anomaly_maps_l1, all_gt_masks, visualization_results = get_anomaly_maps(vae_model=vae_model, diffusion_model=diffusion_model)
-    l1_results = run_inference(all_labels, all_anomaly_maps_l1, all_gt_masks)
-    all_results.extend(l1_results)
+    print('========== SSIM diff ===========')
+    all_labels, all_anomaly_maps, all_gt_masks, visualization_results = get_anomaly_maps(
+        vae_model=vae_model, 
+        diffusion_model=diffusion_model, 
+        method='ssim'
+    )
+    ssim_results = run_inference(all_labels, all_anomaly_maps, all_gt_masks, method='ssim')
+    all_results.extend(ssim_results)
 
     if _save_visualizations:
         save_visualization(
@@ -201,35 +310,7 @@ def run_all_inference():
     with open(results_path, 'w') as f:
         json.dump(all_results, f, indent=2)
 
-    print(f"Results saved to: {results_path}")
-    return all_results
-
-
-def run_inference_during_training(vae_model, diffusion_model, epoch):
-    set_seed(_seed)
-    diffusion_model.netG.eval()
-    all_results = []
-    testing_result_dir = config.testing.test_result_base_dir + _testing_category + '/l1/'
-    os.makedirs(testing_result_dir, exist_ok=True)
-    
-    print(f'======= Inference during the at epoch {epoch} =======')
-    diffusion_model.set_noise_schedule_for_val()
-    try:
-        all_labels, all_anomaly_maps_l1, all_gt_masks, visualization_results = get_anomaly_maps(
-            vae_model=vae_model,
-            diffusion_model=diffusion_model,
-            is_visualization=False
-        )
-        l1_results = run_inference(all_labels, all_anomaly_maps_l1, all_gt_masks)
-        all_results.extend(l1_results)
-
-        results_path = os.path.join(testing_result_dir, f'inference_at_epoch_{epoch}.json')
-        with open(results_path, 'w') as f:
-            json.dump(all_results, f, indent=2)
-    finally:
-        diffusion_model.set_noise_schedule_for_training()
-        diffusion_model.netG.train()
-    
+    print(f"SSIM results saved to: {results_path}")
     return all_results
 
 

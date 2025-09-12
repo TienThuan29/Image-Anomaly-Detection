@@ -12,13 +12,13 @@ training:
 
 general:
   seed: 42
-  batch_size: 1
+  batch_size: 4
   image_size: 256
 
 vae_model:
   name: vae_resnet # vae_resnet, vae_unet
   backbone: resnet18 # resnet18, resnet34, resnet50
-  lr: 3e-4
+  lr: 3e-4  # 1e-4
   epochs: 5000
   weight_decay: 1e-5
   z_dim: 256
@@ -40,7 +40,7 @@ vae_model:
 
 diffusion_model:
   phase: train
-  # unet setting
+  # Unet settings
   unet:
     in_channel: 6
     out_channel: 3
@@ -52,6 +52,7 @@ diffusion_model:
       - 8
       - 8
     attn_res:
+      - 32
       - 16
     res_blocks: 2
     dropout: 0.1
@@ -81,9 +82,9 @@ diffusion_model:
   train_result_base_dir: ../../mvtec_phase2_diffusion/train_results/
   pretrained_save_base_dir: ../../mvtec_phase2_diffusion/diffu_pretrained/
   vae_pretrained_path:
-  begin_eval_at_epoch: 400
+  begin_eval_at_epoch: 300
   eval_interval: 50
-  save_model_each: 200
+  save_model_each: 100
   ema_scheduler:
     use: False
     step_start_ema: 2000

@@ -254,7 +254,7 @@ class DDPM(BaseModel):
         )
 
 
-    def save_network(self, epoch, iter_step, checkpoint_type="latest", loss_history=None, eval_history=None, best_loss=None, best_epoch=None):
+    def save_network(self, epoch, iter_step, checkpoint_type="latest", loss_history=None, eval_history=None, best_loss=None, best_epoch=None, ssim_eval_history=None, best_ssim_px=None, best_ssim_img=None, best_ssim_type=None, best_ssim_epoch=None):
         # Create checkpoint directory if it doesn't exist
         if not os.path.exists(_pretrained_save_dir):
             os.makedirs(_pretrained_save_dir)
@@ -291,6 +291,18 @@ class DDPM(BaseModel):
             checkpoint['best_loss'] = best_loss
         if best_epoch is not None:
             checkpoint['best_epoch'] = best_epoch
+        
+        # Add SSIM evaluation history if provided
+        if ssim_eval_history is not None:
+            checkpoint['ssim_eval_history'] = ssim_eval_history
+        if best_ssim_px is not None:
+            checkpoint['best_ssim_px'] = best_ssim_px
+        if best_ssim_img is not None:
+            checkpoint['best_ssim_img'] = best_ssim_img
+        if best_ssim_type is not None:
+            checkpoint['best_ssim_type'] = best_ssim_type
+        if best_ssim_epoch is not None:
+            checkpoint['best_ssim_epoch'] = best_ssim_epoch
         
         # Add EMA model if available
         if _use_ema_scheduler:

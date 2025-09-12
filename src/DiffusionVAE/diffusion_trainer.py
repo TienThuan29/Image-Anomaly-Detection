@@ -65,9 +65,15 @@ def load_checkpoint(checkpoint_path, diffusion_model, log_dir):
 
     loss_history = checkpoint.get('loss_history', [])
     eval_history = checkpoint.get('eval_history', {'img_auroc': [], 'px_auroc': [], 'epochs': []})
+    ssim_eval_history = checkpoint.get('ssim_eval_history', {'img_auroc': [], 'px_auroc': [], 'epochs': []})
     best_loss = checkpoint.get('best_loss', float('inf'))
     best_epoch = checkpoint.get('best_epoch', 0)
     start_epoch = checkpoint.get('epoch', 0)
+    # Load SSIM evaluation tracking
+    best_ssim_px = checkpoint.get('best_ssim_px', -float('inf'))
+    best_ssim_img = checkpoint.get('best_ssim_img', -float('inf'))
+    best_ssim_type = checkpoint.get('best_ssim_type', None)
+    best_ssim_epoch = checkpoint.get('best_ssim_epoch', 0)
     
     print(f"Resuming from epoch {start_epoch}")
     print(f"Previous best loss: {best_loss:.6f} at epoch {best_epoch}")
@@ -83,7 +89,7 @@ def load_checkpoint(checkpoint_path, diffusion_model, log_dir):
     else:
         logs = []
     
-    return start_epoch, loss_history, eval_history, best_loss, best_epoch, logs
+    return start_epoch, loss_history, eval_history, ssim_eval_history, best_loss, best_epoch, best_ssim_px, best_ssim_img, best_ssim_type, best_ssim_epoch, logs
 
 def train_diffusion():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -123,12 +129,18 @@ def train_diffusion():
     total_epochs = _epochs
     loss_history = []
     eval_history = {'img_auroc': [], 'px_auroc': [], 'epochs': []}
+    ssim_eval_history = {'img_auroc': [], 'px_auroc': [], 'epochs': []}
     best_loss = float('inf')
     best_epoch = 0
     best_eval_px = -float('inf')
     best_eval_img = -float('inf')
     best_eval_type = None
     best_eval_epoch = 0
+    # SSIM evaluation tracking
+    best_ssim_px = -float('inf')
+    best_ssim_img = -float('inf')
+    best_ssim_type = None
+    best_ssim_epoch = 0
     logs = []
 
     diffusion_model = diffusion.model.create_model()
@@ -136,10 +148,11 @@ def train_diffusion():
 
     # Load checkpoint if resuming training
     if _resume_checkpoint and os.path.exists(_resume_checkpoint):
-        start_epoch, loss_history, eval_history, best_loss, best_epoch, logs = load_checkpoint(
+        start_epoch, loss_history, eval_history, ssim_eval_history, best_loss, best_epoch, best_ssim_px, best_ssim_img, best_ssim_type, best_ssim_epoch, logs = load_checkpoint(
             _resume_checkpoint, diffusion_model, _log_result_dir
         )
         print(f"Training resumed from epoch {start_epoch}")
+        print(f"Previous best SSIM - Image AUROC: {best_ssim_img:.6f} (type={best_ssim_type}), Pixel AUROC: {best_ssim_px:.6f} at epoch {best_ssim_epoch}")
     else:
         logs = []
         if _resume_checkpoint:
@@ -207,7 +220,7 @@ def train_diffusion():
             best_loss = epoch_loss
             best_epoch = epoch + 1
             diffusion_model.save_network(epoch + 1, diffusion_model.iter, "best", loss_history, eval_history, best_loss,
-                                         best_epoch)
+                                         best_epoch, ssim_eval_history, best_ssim_px, best_ssim_img, best_ssim_type, best_ssim_epoch)
             print(f"\nNew best model saved! Loss: {best_loss:.6f} at epoch {best_epoch}")
 
         # Periodic evaluation and best-by-eval checkpointing
@@ -215,48 +228,71 @@ def train_diffusion():
         should_eval = current_epoch_num >= _begin_eval_at_epoch and ((current_epoch_num - _begin_eval_at_epoch) % _eval_interval == 0)
         if should_eval:
             try:
-                eval_results = run_inference_during_training(vae_model=vae_model, diffusion_model=diffusion_model, epoch=current_epoch_num)
-                # eval_results is a list of dicts for different image score types; pixel_auroc is same across
-                if isinstance(eval_results, list) and len(eval_results) > 0 and 'pixel_auroc' in eval_results[0]:
-                    pixel_auroc = float(eval_results[0]['pixel_auroc'])
-                    # collect all image aurocs by type
-                    image_aurocs_by_type = {}
-                    for r in eval_results:
+                # Run L1 evaluation
+                print(f"\nRunning L1 evaluation at epoch {current_epoch_num}...")
+                l1_eval_results = run_inference_during_training(vae_model=vae_model, diffusion_model=diffusion_model, epoch=current_epoch_num, method='l1')
+                
+                # Run SSIM evaluation
+                print(f"Running SSIM evaluation at epoch {current_epoch_num}...")
+                ssim_eval_results = run_inference_during_training(vae_model=vae_model, diffusion_model=diffusion_model, epoch=current_epoch_num, method='ssim')
+                
+                # Process L1 results
+                if isinstance(l1_eval_results, list) and len(l1_eval_results) > 0 and 'pixel_auroc' in l1_eval_results[0]:
+                    l1_pixel_auroc = float(l1_eval_results[0]['pixel_auroc'])
+                    l1_image_aurocs_by_type = {}
+                    for r in l1_eval_results:
                         t = r.get('image_score_type', 'unknown')
-                        image_aurocs_by_type[t] = float(r.get('image_auroc', 0.0))
-                    # choose best type by highest image auroc
-                    best_type_now, best_image_now = max(image_aurocs_by_type.items(), key=lambda kv: kv[1])
+                        l1_image_aurocs_by_type[t] = float(r.get('image_auroc', 0.0))
+                    l1_best_type_now, l1_best_image_now = max(l1_image_aurocs_by_type.items(), key=lambda kv: kv[1])
 
-                    eval_history['px_auroc'].append(pixel_auroc)
-                    eval_history['img_auroc'].append(image_aurocs_by_type)
+                    eval_history['px_auroc'].append(l1_pixel_auroc)
+                    eval_history['img_auroc'].append(l1_image_aurocs_by_type)
                     eval_history['epochs'].append(current_epoch_num)
 
-                    # Save best based on image AUROC (tie-breaker: pixel AUROC)
-                    improved = (best_image_now > best_eval_img) or (best_image_now == best_eval_img and pixel_auroc > best_eval_px)
-                    if improved:
-                        best_eval_img = best_image_now
-                        best_eval_px = pixel_auroc
-                        best_eval_type = best_type_now
+                    # Save best L1 based on image AUROC (tie-breaker: pixel AUROC)
+                    l1_improved = (l1_best_image_now > best_eval_img) or (l1_best_image_now == best_eval_img and l1_pixel_auroc > best_eval_px)
+                    if l1_improved:
+                        best_eval_img = l1_best_image_now
+                        best_eval_px = l1_pixel_auroc
+                        best_eval_type = l1_best_type_now
                         best_eval_epoch = current_epoch_num
-                        diffusion_model.save_network(current_epoch_num, diffusion_model.iter, "best_eval", loss_history, eval_history, best_loss, best_epoch)
-                        print(f"\nNew best-eval model saved! Image AUROC: {best_eval_img:.6f} (type={best_eval_type}), Pixel AUROC: {best_eval_px:.6f} at epoch {best_eval_epoch}")
-                        # If an old loss-based best exists, remove it to avoid confusion
-                        legacy_best_path = os.path.join(_pretrained_save_dir, 'diffusion_best.pth')
-                        if os.path.exists(legacy_best_path):
-                            try:
-                                os.remove(legacy_best_path)
-                                print(f"Removed legacy loss-based best checkpoint: {legacy_best_path}")
-                            except Exception as e:
-                                print(f"Warning: failed to remove legacy checkpoint {legacy_best_path}: {e}")
+                        diffusion_model.save_network(current_epoch_num, diffusion_model.iter, "best_eval_l1", loss_history, eval_history, best_loss, best_epoch, ssim_eval_history, best_ssim_px, best_ssim_img, best_ssim_type, best_ssim_epoch)
+                        print(f"\nNew best L1-eval model saved! Image AUROC: {best_eval_img:.6f} (type={best_eval_type}), Pixel AUROC: {best_eval_px:.6f} at epoch {best_eval_epoch}")
                     else:
-                        print(f"Eval at epoch {current_epoch_num}: best image AUROC now={best_image_now:.6f} (type={best_type_now}), pixel AUROC={pixel_auroc:.6f}. Best so far: image {best_eval_img:.6f} (type={best_eval_type}) at epoch {best_eval_epoch}, pixel {best_eval_px:.6f}")
+                        print(f"L1 Eval at epoch {current_epoch_num}: best image AUROC now={l1_best_image_now:.6f} (type={l1_best_type_now}), pixel AUROC={l1_pixel_auroc:.6f}. Best so far: image {best_eval_img:.6f} (type={best_eval_type}) at epoch {best_eval_epoch}, pixel {best_eval_px:.6f}")
+
+                # Process SSIM results
+                if isinstance(ssim_eval_results, list) and len(ssim_eval_results) > 0 and 'pixel_auroc' in ssim_eval_results[0]:
+                    ssim_pixel_auroc = float(ssim_eval_results[0]['pixel_auroc'])
+                    ssim_image_aurocs_by_type = {}
+                    for r in ssim_eval_results:
+                        t = r.get('image_score_type', 'unknown')
+                        ssim_image_aurocs_by_type[t] = float(r.get('image_auroc', 0.0))
+                    ssim_best_type_now, ssim_best_image_now = max(ssim_image_aurocs_by_type.items(), key=lambda kv: kv[1])
+
+                    ssim_eval_history['px_auroc'].append(ssim_pixel_auroc)
+                    ssim_eval_history['img_auroc'].append(ssim_image_aurocs_by_type)
+                    ssim_eval_history['epochs'].append(current_epoch_num)
+
+                    # Save best SSIM based on image AUROC (tie-breaker: pixel AUROC)
+                    ssim_improved = (ssim_best_image_now > best_ssim_img) or (ssim_best_image_now == best_ssim_img and ssim_pixel_auroc > best_ssim_px)
+                    if ssim_improved:
+                        best_ssim_img = ssim_best_image_now
+                        best_ssim_px = ssim_pixel_auroc
+                        best_ssim_type = ssim_best_type_now
+                        best_ssim_epoch = current_epoch_num
+                        diffusion_model.save_network(current_epoch_num, diffusion_model.iter, "best_eval_ssim", loss_history, eval_history, best_loss, best_epoch, ssim_eval_history, best_ssim_px, best_ssim_img, best_ssim_type, best_ssim_epoch)
+                        print(f"\nNew best SSIM-eval model saved! Image AUROC: {best_ssim_img:.6f} (type={best_ssim_type}), Pixel AUROC: {best_ssim_px:.6f} at epoch {best_ssim_epoch}")
+                    else:
+                        print(f"SSIM Eval at epoch {current_epoch_num}: best image AUROC now={ssim_best_image_now:.6f} (type={ssim_best_type_now}), pixel AUROC={ssim_pixel_auroc:.6f}. Best so far: image {best_ssim_img:.6f} (type={best_ssim_type}) at epoch {best_ssim_epoch}, pixel {best_ssim_px:.6f}")
+
             except Exception as e:
                 print(f"Warning: evaluation failed at epoch {current_epoch_num}: {e}")
 
 
         # Save final model at the end
         if epoch == total_epochs - 1:
-            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "final", loss_history, eval_history, best_loss, best_epoch)
+            diffusion_model.save_network(epoch + 1, diffusion_model.iter, "final", loss_history, eval_history, best_loss, best_epoch, ssim_eval_history, best_ssim_px, best_ssim_img, best_ssim_type, best_ssim_epoch)
     
     # Save training summary
     training_summary = {
@@ -267,6 +303,11 @@ def train_diffusion():
         'final_loss': loss_history[-1] if loss_history else None,
         'loss_history': loss_history,
         'evaluation_history': eval_history,
+        'ssim_evaluation_history': ssim_eval_history,
+        'best_ssim_epoch': best_ssim_epoch,
+        'best_ssim_img_auroc': best_ssim_img,
+        'best_ssim_px_auroc': best_ssim_px,
+        'best_ssim_type': best_ssim_type,
         'training_completed': True,
         'timestamp': time.time(),
         'resumed_from_checkpoint': _resume_checkpoint if _resume_checkpoint and os.path.exists(_resume_checkpoint) else None
@@ -279,6 +320,8 @@ def train_diffusion():
     print(f"\nTraining completed!")
     print(f"Best loss: {best_loss:.6f} at epoch {best_epoch}")
     print(f"Final loss: {loss_history[-1]:.6f}")
+    print(f"Best L1 evaluation: Image AUROC {best_eval_img:.6f} (type={best_eval_type}), Pixel AUROC {best_eval_px:.6f} at epoch {best_eval_epoch}")
+    print(f"Best SSIM evaluation: Image AUROC {best_ssim_img:.6f} (type={best_ssim_type}), Pixel AUROC {best_ssim_px:.6f} at epoch {best_ssim_epoch}")
     print(f"Results saved to: {_train_result_dir}")
     print(f"Model checkpoints saved to: {_pretrained_save_dir}")
     print(f"Evaluation logs saved to: {_log_result_dir}")
